@@ -38,6 +38,21 @@ import qualified Dhall.Substitution
 import qualified Dhall.Util
 import qualified System.Directory   as Directory
 
+-- | Key of one loaded import in the shared evaluation environment.
+--
+--   The twin expression uses @'Embed' ('ImportRef' n)@ at each use site.
+--   'Dhall.Import.normalizeLoaded' resolves every reference to one thunk.
+newtype ImportRef = ImportRef Int
+    deriving (Eq, Ord, Show)
+
+-- | A failed import in a collected expression.
+--
+--   The inlined tree holds @'Embed' ('ImportHole' n)@.  The source span, the
+--   import, and the errors live on 'CollectedImportError', not in a variable
+--   name.
+newtype ImportHole = ImportHole Int
+    deriving (Eq, Ord, Show)
+
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
 --   those are well-typed (either of type `List { header : Text, value Text}` or
@@ -124,6 +139,18 @@ data Status = Status
     -- ^ Type of each cached import, recorded when that import is type-checked
     --   so a parent can reuse it instead of inferring the child again.
 
+    , _importRefs :: Map Chained ImportRef
+    -- ^ Stable reference of each cached import in the shared evaluation
+    --   environment.  Allocated once, the first time that import is loaded.
+
+    , _importBodies :: Map ImportRef (Expr Src ImportRef)
+    -- ^ Body of each cached import with child imports replaced by their
+    --   references.  Source spans are stripped when evaluation forces the
+    --   body.  An already-closed import stores that closed expression.
+
+    , _importRefCount :: !Int
+    -- ^ Next 'ImportRef' to allocate.
+
     , _merkleHashCache :: Map Chained SHA256Digest
     -- ^ Per-run map from import to the hash used as that import's contribution
     --   to a parent's disk-cache key. Code imports without an integrity hash
@@ -197,10 +224,23 @@ data Status = Status
     -- ^ Import failures recorded in 'CollectErrors' mode, innermost first.
 
     , _placeholderCount :: !Int
-    -- ^ Counter for placeholder variables substituted for failed imports.
+    -- ^ Next 'ImportHole' index.
+
+    , _importHoles :: Map Chained ImportHole
+    -- ^ Imports that failed and were replaced by a hole.  They are not values
+    --   in '_cache'.
 
     , _importSources :: Map Chained ResolvedImportSource
     -- ^ Text and location captured when an import was actually fetched.
+
+    , _sharedEvaluation :: Bool
+    -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.
+    --   'loadWith' leaves this 'False' and does not build a second syntax tree.
+
+    , _verifySemanticHash :: Bool
+    -- ^ When 'True', a hashed import is normalized and rejected if its
+    --   semantic hash differs.  The language server leaves this 'False'
+    --   during ordinary loads and checks a hash only when asked.
     }
 
 -- | How 'Dhall.Import.loadWith' treats a failed import.
@@ -222,9 +262,8 @@ data CollectedImportError = CollectedImportError
     , collectedStack :: NonEmpty Chained
     , collectedErrors :: [SomeException]
     , collectedKnownType :: Maybe KnownImportType
-    , collectedName :: Text
-    -- ^ Placeholder variable substituted for this failure.  The name contains
-    --   a backtick, so it cannot clash with a real label.
+    , collectedHole :: ImportHole
+    -- ^ Hole substituted for this failure.
     }
 
 -- | Source text fetched for an import, and where it was fetched from.
@@ -256,6 +295,12 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _importTypes = Map.empty
 
+    _importRefs = Map.empty
+
+    _importBodies = Map.empty
+
+    _importRefCount = 0
+
     _merkleHashCache = Map.empty
 
     _merkleContextFingerprint = Nothing
@@ -286,7 +331,13 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _placeholderCount = 0
 
+    _importHoles = Map.empty
+
     _importSources = Map.empty
+
+    _sharedEvaluation = False
+
+    _verifySemanticHash = True
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
@@ -303,6 +354,14 @@ cache = lens _cache (\s x -> s { _cache = x })
 -- | Lens from a `Status` to its `_importTypes` field
 importTypes :: Lens' Status (Map Chained (Expr Src Void))
 importTypes = lens _importTypes (\s x -> s { _importTypes = x })
+
+-- | Lens from a `Status` to its `_importRefs` field
+importRefs :: Lens' Status (Map Chained ImportRef)
+importRefs = lens _importRefs (\s x -> s { _importRefs = x })
+
+-- | Lens from a `Status` to its `_importBodies` field
+importBodies :: Lens' Status (Map ImportRef (Expr Src ImportRef))
+importBodies = lens _importBodies (\s x -> s { _importBodies = x })
 
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
@@ -361,6 +420,14 @@ importErrorMode = lens _importErrorMode (\s x -> s { _importErrorMode = x })
 collectedImportErrors :: Lens' Status [CollectedImportError]
 collectedImportErrors =
     lens _collectedImportErrors (\s x -> s { _collectedImportErrors = x })
+
+-- | Lens from a `Status` to its `_importHoles` field
+importHoles :: Lens' Status (Map Chained ImportHole)
+importHoles = lens _importHoles (\s x -> s { _importHoles = x })
+
+-- | Lens from a `Status` to its `_verifySemanticHash` field
+verifySemanticHash :: Lens' Status Bool
+verifySemanticHash = lens _verifySemanticHash (\s x -> s { _verifySemanticHash = x })
 
 -- | Lens from a `Status` to its `_importSources` field
 importSources :: Lens' Status (Map Chained ResolvedImportSource)

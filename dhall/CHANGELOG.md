@@ -16,6 +16,8 @@
   its argument. Any combination of the three flags is allowed, and omitting
   one leaves that limit off. Hitting the allocation or time limit yields no
   partial normal form. Import resolution is not part of the time limit.
+  `dhall type`, `dhall repl`, and the default `dhall` command all honor these
+  flags (`dhall type` applies them to inference and type rendering).
 * The REPL keeps previous `:let` bindings in a `TypingContext` and type-checks
   them only once with their values kept. Each new REPL command
   type-checks and normalizes only the new expression rather than all previous `:let`s.
@@ -31,6 +33,14 @@
   value and type already checked for that child, instead of inferring the
   inlined child again. `load` still returns the fully inlined expression,
   and still stops at the first error unless `CollectErrors` is set.
+* `input`, `inputExpr`, `interpretExpr`, and `fromExpr` evaluate each
+  imported file once, even when several files import it. The default
+  `dhall` command does the same, including when a limit flag is set.
+  `load` and `dhall resolve` still return the fully inlined expression,
+  and do not build the second tree used for that shared evaluation.
+  The shared tree refers to each import by an internal reference, and the
+  evaluator resolves each reference to one thunk.
+  A custom normalizer still evaluates that inlined expression.
 * [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
   * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
   * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.

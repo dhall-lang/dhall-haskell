@@ -3,7 +3,7 @@
 The Dhall language integration consists of the following parts:
 - The VSCode/ium plugin "Dhall Language Support" *([vscode-language-dhall](https://github.com/dhall-lang/vscode-language-dhall))* adds syntax highlighting for Dhall files.
 - The VSCode/ium plugin "Dhall LSP Server" *([vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server))* implements the LSP client &ndash; yes, there is a naming issue here &ndash; that communicates with the backend via the [LSP protocol](https://microsoft.github.io/language-server-protocol/specification) to provide advanced language features like error diagnostics or type information, etc.
-- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend) that implements those language features in an editor agnostic way, though at the moment only a VSCode/ium frontend exists.
+- [*dhall-lsp-server*](https://github.com/dhall-lang/dhall-haskell/tree/master/dhall-lsp-server), which is part of the [*dhall-haskell*](https://github.com/dhall-lang/dhall-haskell) project, implements the actual LSP server (i.e. the backend). Any editor that speaks LSP can use it. The VS Code extension in [vscode-dhall-lsp-server](https://github.com/dhall-lang/vscode-dhall-lsp-server) is one client; Neovim, Emacs, Helix, Zed and Sublime are others. Point the client at the `dhall-lsp-server` executable. Semantic tokens and folding appear only when that client requests them.
 
 # Installation
 
@@ -42,14 +42,31 @@ For detailed instructions as well as instructions using cabal or nix, see [`dhal
 
 # Usage / Features
 
+The server speaks standard LSP, so Neovim, Emacs, Helix, Zed and Sublime can use it as well as VS Code. A client only shows a feature when it requests that method. Semantic tokens and folding ranges need a client that asks for them (the VS Code extension does after `vscode-languageclient` 8). Definition, references, rename, symbols and code actions work with older clients. Opening a non-file import needs a client filesystem for the `dhall-import` scheme, described under Imports.
+
 - **Diagnostics&nbsp;**
-Every time you save a Dhall file it is parsed and typechecked, and any errors are marked. You can hover over the offending code to see the error message; to see a detailed explanation in the case of type errors, click the *Explain* link in the hover box.
+The file is parsed and typechecked when you open it, when you save it, and shortly after you stop typing. Every failed import is reported, including failures inside an imported file. You can hover over the offending code to see the error message. A later syntax error does not hide an earlier type error whose code is unchanged. An unused `let` is marked unnecessary on the binding's name.
+
+- **Go to definition, references, highlight and rename&nbsp;**
+Names bound by `let`, lambda, `forall` and record fields resolve in the file, including `x@n`. A field of an imported value, such as `Lib.customFunction`, opens that import at the field. A local import opens the file itself. A remote import, an environment import, or a hash read from the semantic cache opens a read-only `dhall-import:///<name>.dhall` view. When this session has no source text for that hash, the view is the alpha-beta-normal form decoded from the cache CBOR. Relative imports inside a remote view resolve from that URL. Rename edits each of those sites in the current file.
+
+- **Symbols, folding and semantic tokens&nbsp;**
+Document symbols list the bindings. Folding ranges cover a multi-line `let` value (`let a = …` collapses so the next `let` or `in` stays visible), including later bindings in a `let x = … let y = … in …` chain. Lambda, function type, record, union, non-empty list, `if`, `merge`, or text literal also fold, one range per start line. Record folds end at the closing `}`, so a `.field` on the same line is not part of the fold. Semantic tokens mark name declarations and uses. If the buffer has a syntax error, navigation keeps using the last successful parse.
+
+- **Code actions&nbsp;**
+Quick Fix lists an edit only when it applies to the selection. "Normalize selection" and "Extract let" are offered when the selection parses as an expression. Normalize replaces that selection with its normal form, using the enclosing `let` bindings even when the file as a whole does not type-check, and is refused when the form is larger than `maxOutputSize` (default 16KiB) or the evaluation limit is hit. An empty selection is reported as empty. Extract let lifts the selection into `let extracted = … in extracted`. "Explain error" is a Quick Fix offered for a type error or a parse error: for the diagnostic under the cursor, even with an empty selection, or when the selection meets the error's range. It opens the explanation with `window/showDocument` at a `dhall-explain:` URI, which the VS Code client serves from memory when it registers that scheme. A failed assertion names both sides in the diagnostic; an assertion whose sides have different types names both types. Each side is cut at 2048 characters. "Remove unused let" deletes the unused binding under the cursor. The commands `dhall.server.lint`, `dhall.server.annotateLet`, `dhall.server.freezeImport` and `dhall.server.freezeAllImports` stay available from the editor.
+
+- **Imports&nbsp;**
+Each `dhall-import:` view is also written under `$XDG_CACHE_HOME/dhall-lsp/sources/<name>.dhall`. The server returns those bytes from the custom request `dhall/importSource`. VS Code can open the view only when the extension registers a read-only filesystem for the `dhall-import` scheme and lists that scheme in its document selector. The marketplace extension does not register that filesystem, so Go to Definition fails with `Unable to resolve resource dhall-import:/<name>.dhall`. "Show original source" is the command `dhall.server.showOriginalSource` and fetches only when you run it.
+
+- **Output size&nbsp;**
+`vscode-dhall-lsp-server.maxOutputSize` is the maximum rendered size of a normal form the server will show, in bytes. The default is 16384 (16KiB). It does not change ordinary evaluation outside the server.
 
 - **Clickable imports&nbsp;**
-As long as the file parses successfully, all (local file and remote) imports will be underlined and clickable.
+Local and remote imports are underlined and clickable. If the buffer has a syntax error, the links come from the last successful parse, the same fallback navigation uses. A parse failure is not logged as a document-link error.
 
 - **Type on hover&nbsp;**
-You can hover over any part of the code and it will tell you the type of the subexpression at that point &ndash; if you highlight an identifier you see its type; if you highlight the `->` in a function you will see the type of the entire function. This feature only works if the code passes the typechecker!
+You can hover over any part of the code and it will tell you the type of the subexpression at that point &ndash; if you highlight an identifier you see its type; if you highlight the `->` in a function you will see the type of the entire function. Hover reports a type when that subexpression can still be typed, even if another `let` or an import in the file fails. It does not repeat the diagnostic already shown by the editor. A missing import's diagnostic text is cut at 2048 characters. If the buffer has a syntax error, hover uses the last successful parse when the hovered slice is unchanged.
 
 - **Code completion&nbsp;**
 As you type you will be offered completions for:
@@ -58,6 +75,7 @@ As you type you will be offered completions for:
   - identifiers in scope (as well as built-ins)
   - record projections from 'easy-to-parse' records (of the form `ident1.ident2`[`.ident3...`])
   - union constructors from 'easy-to-parse' unions
+  - fields and constructors after an expression, such as `(f x).` or `{ a = 1 }.`, when the file typechecks once the dot is removed. Completions come from the type (or from a union expression that is already a union), without normalizing the expression
 
   This is the only feature that works even when the file does not parse (or typecheck).
 
@@ -72,8 +90,14 @@ This can be overriden by using the Dhall LSP settings. For example in VS Code's 
 - **Annotate lets&nbsp;**
 Right-click the bound identifier in a `let` binding and select "Annotate Let binding with its type" to do exactly that.
 
+- **Inline let&nbsp;**
+On a `let` binder, "Inline let" replaces each use with the bound value, adding parentheses when the value contains a space, and deletes the binding. It is refused when a binder between the `let` and a use would capture a name from the value, when the body uses `name@n`, or when the value contains `assert`. The editor lists it in the lightbulb (Quick Fix) and under Refactor ▸ Inline.
+
+- **Organize imports&nbsp;**
+"Organize imports" walks every `let` in the file, including nested scopes. It keeps bindings whose value is a bare import (`let x = ./path` or `let x = https://…`, not `let x = 1 + ./path`), drops unused ones, and hoists the rest to a top-level multi-let sorted by name, headed by `-- Imports.`. Existing comments at the top of the file are left in place and `-- Imports.` is inserted after them. A bare import cannot mention bound variables, so the move is semantics-preserving when names do not clash. The cursor does not have to sit on an import. The action is offered as both a Quick Fix and a Source Action (`source.organizeImports`, Shift+Alt+O). It is listed as disabled when two import lets share a name, when hoisting would be captured by another binder of the same name, or when the imports are already organized.
+
 - **Freeze imports&nbsp;**
-Right-click an import statement and select "Freeze (refreeze) import" to add (or update) a semantic hash annotation to the import. You can also select "Freeze (refreeze) all imports" from the *Command Palette* to freeze all imports at once.
+Right-click an import statement and select "Freeze (refreeze) import" to add (or update) a semantic hash annotation to the import. You can also select "Freeze (refreeze) all imports" from the *Command Palette* to freeze all imports at once. With the cursor on an import, Quick Fix also offers "Freeze import", "Unfreeze import" and "Unfreeze all imports". Unfreeze deletes the hash. A `missing` import is left unchanged, because without its hash it always fails. Ordinary analysis does not normalize a hashed import to check its hash. "Check import hash", offered on a hashed import, does that check and reports whether the annotation matches.
 
   Note that this feature behaves slightly differently from the `dhall freeze` command in that the hash annotations are inserted without re-formatting the rest of the code!
 

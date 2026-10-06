@@ -7,12 +7,14 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Core             (Expr (..), ReifiedNormalizer (..))
+import Dhall.Core             (Expr (..), Import, RecordField (..), ReifiedNormalizer (..), Var (..))
 import Dhall.Import           (Imported, MissingImports (..))
-import Dhall.Parser           (SourcedException (..), Src)
+import Dhall.Parser           (Header (..), SourcedException (..), Src (..))
+import Dhall.Pretty           (CharacterSet (..))
 import Dhall.TypeCheck        (TypeError)
 import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
+import Text.Megaparsec        (SourcePos (..), mkPos)
 
 import qualified Control.Exception
 import qualified Data.Text
@@ -24,6 +26,7 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Test.Format         as Format
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.Test.Regression.TextReplaceNoop
 import qualified Dhall.TypeCheck
@@ -59,6 +62,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , formattingIdempotentWithCommentWhitespace
         , Dhall.Test.Regression.TextReplaceNoop.tests
         , largeNaturalLiteralParsing
         , largeNaturalHexadecimalParsing
@@ -331,6 +335,74 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+-- QuickCheck's "Formatting should be idempotent" property found these on
+-- Windows CI.  Trailing spaces and `\r` from `\r\n` must not affect wrapping
+-- width, but a bare `\r` in the comment body is not a line break.
+formattingIdempotentWithCommentWhitespace :: TestTree
+formattingIdempotentWithCommentWhitespace =
+    Test.Tasty.testGroup "Formatting comments with phantom width is idempotent"
+        [ commentFormatIdempotent "trailing space on a comment line"
+            (RecordCompletion
+                (ListAppend TextReplace (Var (V "aaaaaaaaaaaaaa " 0)))
+                (Record (Dhall.Map.fromList
+                    [ ( ""
+                      , RecordField
+                            (Just (commentSrcSpan
+                                "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_ \n\n--h-~cy~_k;\n\n"
+                            ))
+                            (RecordLit mempty)
+                            Nothing
+                            Nothing
+                      )
+                    ])))
+        , commentFormatIdempotent "CRLF between comment lines"
+            (RecordCompletion
+                (ListAppend TextReplace (Var (V "aaaaaaaaaaaaaa " 0)))
+                (Record (Dhall.Map.fromList
+                    [ ( ""
+                      , RecordField
+                            (Just (commentSrcSpan
+                                "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_\r\n\n--h-~cy~_k;\n\n"
+                            ))
+                            (RecordLit mempty)
+                            Nothing
+                            Nothing
+                      )
+                    ])))
+        , commentFormatIdempotent "bare CR in a record-literal field comment"
+            (RecordLit (Dhall.Map.fromList
+                [ ( ""
+                  , RecordField Nothing
+                        (RecordLit (Dhall.Map.fromList
+                            [("", field "--\1002867{c/cB7\r7\n\n" Time)]
+                        ))
+                        Nothing
+                        Nothing
+                  )
+                ]))
+        , commentFormatIdempotent "bare CR in a record-type field comment"
+            (Record (Dhall.Map.fromList
+                [("", field "--;~mUt!,s\rkZ5J\r\n\n--vV\r\n\n" NaturalSubtract)]
+            ))
+        ]
+  where
+    field commentSrc value =
+        RecordField Nothing value Nothing (Just (commentSrcSpan commentSrc))
+
+    commentSrcSpan commentSrc =
+        Src
+            (SourcePos "" (mkPos 1) (mkPos 1))
+            (SourcePos "" (mkPos 1) (mkPos 1))
+            commentSrc
+
+commentFormatIdempotent :: String -> Expr Src Import -> TestTree
+commentFormatIdempotent name expr =
+    Test.Tasty.HUnit.testCase name (do
+        let once = Format.format Unicode (Header "", expr)
+        headerAndExpr <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText mempty once)
+        Format.format Unicode headerAndExpr @?= once
+    )
 
 largeNaturalLiteralParsing :: TestTree
 largeNaturalLiteralParsing =

@@ -22,6 +22,7 @@ import Dhall.Core
     , Var (..)
     , normalize
     , pretty
+    , shallowDenote
     , reservedIdentifiers
     , shift
     , subst
@@ -45,6 +46,108 @@ completionQueryAt text pos = (completionLeadup, completionPrefix)
     (\(l,r) -> (Text.reverse l, Text.reverse r)) . Text.break p . Text.reverse
   (completionPrefix, completionLeadup) =
     breakEnd (`elem` (" \t\n[(,=+*&|}#?>" :: String)) text'
+
+-- | The expression that ends at the end of the input, and the offset where
+--   it starts.
+--
+--   Used to find the completion target before a dot while the surrounding
+--   code does not parse yet.  The scan tracks strings, comments and bracket
+--   nesting; the target starts after the last operator at bracket depth
+--   zero, so @let x = { a = 1 }@ yields @{ a = 1 }@.  Returns 'Nothing' when
+--   the trailing expression is empty or a bracket is still open.
+expressionBefore :: Text -> Maybe (Int, Text)
+expressionBefore raw
+    | Text.null text = Nothing
+    | not (null brackets) = Nothing
+    | Text.null target = Nothing
+    | otherwise = Just (start, target)
+  where
+    text = Text.stripEnd raw
+    (brackets, boundary) = scan 0 Nothing Code [] 0 text
+    dropped = Text.drop boundary text
+    start = boundary + Text.length dropped - Text.length target
+    target = Text.stripStart dropped
+
+    -- Operators that end the trailing expression at bracket depth zero.
+    -- Whitespace is not one: an application like @(f x) 1.@ completes from
+    -- the whole application.
+    separators = "=+*&|?#:,\x2192" :: String
+
+    scan :: Int -> Maybe Char -> ScanMode -> [Char] -> Int -> Text -> ([Char], Int)
+    scan index previous mode stack cut rest =
+        case Text.uncons rest of
+            Nothing ->
+                (stack, cut)
+            Just (c, cs) ->
+                case mode of
+                    Code
+                        | c == '"' ->
+                            scan (index + 1) (Just c) InString stack cut cs
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '\'') InMulti stack cut cs'
+                        | c == '-', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') InLineComment stack cut cs'
+                        | c == '{', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') (InBlockComment 1) stack cut cs'
+                        | c == '{' ->
+                            scan (index + 1) (Just c) Code ('}' : stack) cut cs
+                        | c == '(' ->
+                            scan (index + 1) (Just c) Code (')' : stack) cut cs
+                        | c == '[' ->
+                            scan (index + 1) (Just c) Code (']' : stack) cut cs
+                        | c == '<' ->
+                            scan (index + 1) (Just c) Code ('>' : stack) cut cs
+                        | c == '>', previous == Just '-' ->
+                            -- an arrow, not a union closer
+                            scan (index + 1) (Just c) Code stack
+                                (if null stack then index + 1 else cut) cs
+                        | c `elem` ("})]>" :: String) ->
+                            case stack of
+                                top : inner
+                                    | top == c ->
+                                        scan (index + 1) (Just c) Code inner cut cs
+                                [] ->
+                                    -- a stray closer ends the trailing expression
+                                    scan (index + 1) (Just c) Code stack (index + 1) cs
+                                _ ->
+                                    scan (index + 1) (Just c) Code stack cut cs
+                        | null stack && c `elem` separators ->
+                            scan (index + 1) (Just c) Code stack (index + 1) cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) Code stack cut cs
+                    InString
+                        | c == '\\', Just (_, cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just 'x') InString stack cut cs'
+                        | c == '"' ->
+                            scan (index + 1) (Just c) Code stack cut cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) InString stack cut cs
+                    InMulti
+                        | c == '\'', Just ('\'', cs') <- Text.uncons cs ->
+                            case Text.uncons cs' of
+                                -- ''' is an escaped '' inside a multi-line literal
+                                Just ('\'', cs'') ->
+                                    scan (index + 3) (Just '\'') InMulti stack cut cs''
+                                _ ->
+                                    scan (index + 2) (Just '\'') Code stack cut cs'
+                        | otherwise ->
+                            scan (index + 1) (Just c) InMulti stack cut cs
+                    InLineComment
+                        | c == '\n' ->
+                            scan (index + 1) (Just c) Code stack cut cs
+                        | otherwise ->
+                            scan (index + 1) (Just c) InLineComment stack cut cs
+                    InBlockComment depth
+                        | c == '{', Just ('-', cs') <- Text.uncons cs ->
+                            scan (index + 2) (Just '-') (InBlockComment (depth + 1)) stack cut cs'
+                        | c == '-', Just ('}', cs') <- Text.uncons cs ->
+                            let depth' = depth - 1
+                                mode' = if depth' == 0 then Code else InBlockComment depth'
+                            in scan (index + 2) (Just '}') mode' stack cut cs'
+                        | otherwise ->
+                            scan (index + 1) (Just c) (InBlockComment depth) stack cut cs
+
+data ScanMode = Code | InString | InMulti | InLineComment | InBlockComment !Int
 
 -- | A completion result, optionally annotated with type information.
 data Completion =
@@ -180,23 +283,45 @@ completeProjections (CompletionContext context values) expr =
   in case typeWithA absurd context expr' of
       Left _ -> []
       Right _A ->
-        let expr'' = normalize expr'
-        in completeUnion expr'' expr'' ++ completeRecord (normalize _A)
+        -- Field and constructor names come from the type spine; full
+        -- normalization of large records is unnecessary here.
+        completionsFromNormal expr' (shallowDenote _A)
 
- where
-  -- complete a union constructor by inspecting the union value
-  completeUnion _A (Union m) =
+-- | Fields of a record type, and constructors of a union type.
+--
+--   The expression itself is not normalized.  A union written before the
+--   dot is already a union, so its constructors come from that expression.
+--   A record projection comes from the type.
+completionsFromNormal :: Expr Src Void -> Expr Src Void -> [Completion]
+completionsFromNormal value ty =
+    let value' = shallowDenote value
+        ty' = shallowDenote ty
+    in completeRecord ty'
+        ++ case value' of
+            Union _ ->
+                -- A union written before the dot.  Constructors inhabit that
+                -- union, so the result type is the union itself.
+                completeUnion value' value'
+            _ ->
+                completeUnion ty' ty'
+
+-- complete a union constructor by inspecting the union value
+completeUnion :: Expr Src Void -> Expr Src Void -> [Completion]
+completeUnion _A (Union m) =
     let constructor (k, Nothing) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just _A)
         constructor (k, Just v) =
             Completion (Dhall.Pretty.escapeLabel AnyLabelOrSome k) (Just (Pi mempty k v _A))
      in map constructor (Dhall.Map.toList m)
-  completeUnion _ _ = []
+completeUnion _ _ =
+    []
 
-
-  -- complete a record projection by inspecting the record type
-  completeRecord (Record m) = map toCompletion (Dhall.Map.toList $ recordFieldValue <$> m)
-    where
-      toCompletion (name, typ) =
-          Completion (Dhall.Pretty.escapeLabel AnyLabel name) (Just typ)
-  completeRecord _ = []
+-- complete a record projection by inspecting the record type
+completeRecord :: Expr Src Void -> [Completion]
+completeRecord (Record m) =
+    map toCompletion (Dhall.Map.toList (recordFieldValue <$> m))
+  where
+    toCompletion (name_, typ) =
+        Completion (Dhall.Pretty.escapeLabel AnyLabel name_) (Just typ)
+completeRecord _ =
+    []

@@ -21,7 +21,9 @@ module Dhall.TypeCheck (
     , extendAlreadyChecked
     , bindAlreadyChecked
     , typeWithContext
+    , typeWithContextBounded
     , normalizeWithContext
+    , normalizeWithContextBounded
     , checkContext
     , messageExpressions
 
@@ -249,6 +251,19 @@ typeWithContext
 typeWithContext (TypingContext ctx) expression =
     fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer absurd ctx expression)
 
+-- | Like 'typeWithContext', but stop quoting the inferred type once the
+--   estimated rendered size reaches @budget@ bytes.  The 'Bool' is 'True'
+--   when quoting was cut short.
+typeWithContextBounded
+    :: Int
+    -> TypingContext s
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X, Bool)
+typeWithContextBounded budget (TypingContext ctx) expression = do
+    typeVal <- infer absurd ctx expression
+    let (quoted, cut) = Eval.quoteBounded budget Eval.EmptyNames typeVal
+    return (Dhall.Core.renote quoted, cut)
+
 -- | Normalize an expression using values already stored in the context.
 --
 --   Bindings are not substituted back into the expression first, so earlier
@@ -259,6 +274,25 @@ normalizeWithContext (TypingContext ctx) expression =
         (Eval.quote (Eval.envNames env) (Eval.eval env (Dhall.Core.denote expression)))
   where
     env = values ctx
+
+-- | Like 'normalizeWithContext', but stop quoting once the estimated rendered
+--   size reaches @budget@ bytes.  The 'Bool' is 'True' when quoting was cut
+--   short.  Parts that were not quoted are not forced.
+normalizeWithContextBounded
+    :: Int
+    -> TypingContext s
+    -> Expr t X
+    -> (Expr u X, Bool)
+normalizeWithContextBounded budget (TypingContext ctx) expression =
+    (Dhall.Core.renote quoted, cut)
+  where
+    env = values ctx
+
+    (quoted, cut) =
+        Eval.quoteBounded
+            budget
+            (Eval.envNames env)
+            (Eval.eval env (Dhall.Core.denote expression))
 
 contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
 contextToCtx context = loop (Dhall.Context.toList context)
