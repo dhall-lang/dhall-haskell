@@ -264,12 +264,24 @@ renderComment text =
   where
     horizontalSpace c = c == ' ' || c == '\t'
 
+    -- Detect an end-of-line on the original text.  `\r` is included because
+    -- the parser treats `"\r\n"` (and we treat a leftover `"\r"`) as a newline
+    -- rather than comment payload.
     suffix =
-        if Text.null text || Text.last text == '\n'
+        if Text.null text || Text.last text == '\n' || Text.last text == '\r'
         then mempty
         else " "
 
-    oldLines = Text.splitOn "\n" text
+    -- `layout` runs `removeTrailingWhitespace` *after* measuring width, and
+    -- the parser's line comments stop before `\r`.  If those characters stay
+    -- in the document they inflate column counts, so a later format pass (with
+    -- them already gone) can pick a different `group` layout.  Normalize first
+    -- so the width used for wrapping matches the text that will be reparsed.
+    normalized =
+        Text.replace "\r" "\n" (Text.replace "\r\n" "\n" text)
+
+    oldLines =
+        map (Text.dropWhileEnd horizontalSpace) (Text.splitOn "\n" normalized)
 
     spacePrefix = Text.takeWhile horizontalSpace
 

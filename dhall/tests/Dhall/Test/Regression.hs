@@ -7,12 +7,14 @@ module Dhall.Test.Regression where
 
 import Data.Either.Validation (Validation (..))
 import Data.Void              (Void)
-import Dhall.Core             (Expr (..), ReifiedNormalizer (..))
+import Dhall.Core             (Expr (..), Import, RecordField (..), ReifiedNormalizer (..), Var (..))
 import Dhall.Import           (Imported, MissingImports (..))
-import Dhall.Parser           (SourcedException (..), Src)
+import Dhall.Parser           (Header (..), SourcedException (..), Src (..))
+import Dhall.Pretty           (CharacterSet (..))
 import Dhall.TypeCheck        (TypeError)
 import Test.Tasty             (TestTree)
 import Test.Tasty.HUnit       ((@?=))
+import Text.Megaparsec        (SourcePos (..), mkPos)
 
 import qualified Control.Exception
 import qualified Data.Text
@@ -24,6 +26,7 @@ import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
+import qualified Dhall.Test.Format         as Format
 import qualified Dhall.Test.Util           as Util
 import qualified Dhall.Test.Regression.TextReplaceNoop
 import qualified Dhall.TypeCheck
@@ -59,6 +62,7 @@ tests =
         , typeChecking2
         , unnamedFields
         , trailingSpaceAfterStringLiterals
+        , formattingIdempotentWithCommentWhitespace
         , Dhall.Test.Regression.TextReplaceNoop.tests
         , largeNaturalLiteralParsing
         , largeNaturalHexadecimalParsing
@@ -331,6 +335,37 @@ trailingSpaceAfterStringLiterals =
         -- (Yes, I did get this wrong at some point)
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
+
+-- QuickCheck's "Formatting should be idempotent" property found this on
+-- Windows CI: a record-field comment whose first line is one column over the
+-- 80-character wrapping limit *only* because of a trailing space or `\r`.
+-- `layout` strips trailing spaces after measuring width, and the parser treats
+-- `\r\n` as an end-of-line, so the second format pass wrapped differently.
+formattingIdempotentWithCommentWhitespace :: TestTree
+formattingIdempotentWithCommentWhitespace =
+    Test.Tasty.testGroup "Formatting comments with phantom width is idempotent"
+        [ commentFormatIdempotent "trailing space on a comment line"
+            "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_ \n\n--h-~cy~_k;\n\n"
+        , commentFormatIdempotent "CRLF between comment lines"
+            "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_\r\n\n--h-~cy~_k;\n\n"
+        ]
+
+commentFormatIdempotent :: String -> Data.Text.Text -> TestTree
+commentFormatIdempotent name commentSrc =
+    Test.Tasty.HUnit.testCase name (do
+        let src = Src
+                (SourcePos "" (mkPos 1) (mkPos 1))
+                (SourcePos "" (mkPos 1) (mkPos 1))
+                commentSrc
+            field = RecordField (Just src) (RecordLit mempty) Nothing Nothing
+            expr :: Expr Src Import
+            expr = RecordCompletion
+                (ListAppend TextReplace (Var (V "aaaaaaaaaaaaaa " 0)))
+                (Record (Dhall.Map.fromList [("", field)]))
+            once = Format.format Unicode (Header "", expr)
+        headerAndExpr <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText mempty once)
+        Format.format Unicode headerAndExpr @?= once
+    )
 
 largeNaturalLiteralParsing :: TestTree
 largeNaturalLiteralParsing =
