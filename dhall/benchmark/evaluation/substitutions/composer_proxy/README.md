@@ -24,6 +24,10 @@ There are **two** generated trees. The original flat list is a control; the
 | Cache | Mode **D** cold only (`end_to_end_cold`) |
 | Code vs Source | `pipeline-code.dhall` / `pipeline-source.dhall` |
 
+This group does **not** reproduce the customer as-source slowdown: every
+module is imported once, so Source finalization does not re-walk shared
+subtrees, and there are no hash-protected children.
+
 ## 2. Overlapping graph (`substitutions.composer_proxy.many_imports.*`)
 
 Generated at prep (not committed):
@@ -33,6 +37,9 @@ Generated at prep (not committed):
 | `leaves/` | 100 closed 64-field Natural records (hashed) |
 | `parents/` | 24 modules; each imports 16 overlapping hashed leaves, annotated with `UserType*` |
 | `aggregators/` | 8 modules; each imports 10 overlapping unhashed parents |
+| `leaves/` | 400 closed 64-field Natural records (hashed) |
+| `parents/` | 80 modules; each imports 40 overlapping hashed leaves, annotated with `UserType*` |
+| `aggregators/` | 16 modules; each imports 20 overlapping unhashed parents |
 | `package.dhall` | list of aggregators |
 
 Overlapping **unhashed** parents are the Source-cost amplifier: Code hits

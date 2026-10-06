@@ -36,6 +36,7 @@ getTests = return
         , testCase "Large NF stores a well-typed marker only" largeNFMarkerTest
         , testCase "Early-abort size check agrees with full walk" earlyAbortAgreesWithFullWalkTest
         , testCase "Child change invalidates parent cache" childChangeInvalidatesParentTest
+        , testCase "as Source still evaluates" asSourceStillWorksTest
         ])
 
 withTempCache :: (FilePath -> IO a) -> IO a
@@ -196,3 +197,17 @@ childChangeInvalidatesParentTest = withTempCache $ \_cacheDir ->
             "parent must observe child change (merkle miss)"
             expected2
             result2
+
+-- | as Source path must keep working (does not use the Code NF semisemantic cache).
+asSourceStillWorksTest :: IO ()
+asSourceStillWorksTest = withTempCache $ \_cacheDir ->
+    Temp.withSystemTempDirectory "dhall-as-source" $ \dir -> do
+        let childPath = dir </> "child.dhall"
+        let parentPath = dir </> "parent.dhall"
+
+        Text.IO.writeFile childPath "{ x = 1, y = 2 }"
+        Text.IO.writeFile parentPath "(./child.dhall as Source).x"
+
+        result <- inputFile parentPath
+        expected <- Dhall.inputExpr "1"
+        assertNormalizedEqual "as Source field projection" expected result
