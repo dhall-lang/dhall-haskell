@@ -336,33 +336,70 @@ trailingSpaceAfterStringLiterals =
         _ <- Util.code "(''\nABC'' ++ \"DEF\" )"
         return () )
 
--- QuickCheck's "Formatting should be idempotent" property found this on
--- Windows CI: a record-field comment whose first line is one column over the
--- 80-character wrapping limit *only* because of a trailing space or `\r`.
--- `layout` strips trailing spaces after measuring width, and the parser treats
--- `\r\n` as an end-of-line, so the second format pass wrapped differently.
+-- QuickCheck's "Formatting should be idempotent" property found these on
+-- Windows CI.  Trailing spaces and `\r` from `\r\n` must not affect wrapping
+-- width, but a bare `\r` in the comment body is not a line break.
 formattingIdempotentWithCommentWhitespace :: TestTree
 formattingIdempotentWithCommentWhitespace =
     Test.Tasty.testGroup "Formatting comments with phantom width is idempotent"
         [ commentFormatIdempotent "trailing space on a comment line"
-            "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_ \n\n--h-~cy~_k;\n\n"
-        , commentFormatIdempotent "CRLF between comment lines"
-            "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_\r\n\n--h-~cy~_k;\n\n"
-        ]
-
-commentFormatIdempotent :: String -> Data.Text.Text -> TestTree
-commentFormatIdempotent name commentSrc =
-    Test.Tasty.HUnit.testCase name (do
-        let src = Src
-                (SourcePos "" (mkPos 1) (mkPos 1))
-                (SourcePos "" (mkPos 1) (mkPos 1))
-                commentSrc
-            field = RecordField (Just src) (RecordLit mempty) Nothing Nothing
-            expr :: Expr Src Import
-            expr = RecordCompletion
+            (RecordCompletion
                 (ListAppend TextReplace (Var (V "aaaaaaaaaaaaaa " 0)))
-                (Record (Dhall.Map.fromList [("", field)]))
-            once = Format.format Unicode (Header "", expr)
+                (Record (Dhall.Map.fromList
+                    [ ( ""
+                      , RecordField
+                            (Just (commentSrcSpan
+                                "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_ \n\n--h-~cy~_k;\n\n"
+                            ))
+                            (RecordLit mempty)
+                            Nothing
+                            Nothing
+                      )
+                    ])))
+        , commentFormatIdempotent "CRLF between comment lines"
+            (RecordCompletion
+                (ListAppend TextReplace (Var (V "aaaaaaaaaaaaaa " 0)))
+                (Record (Dhall.Map.fromList
+                    [ ( ""
+                      , RecordField
+                            (Just (commentSrcSpan
+                                "--Zbq^d_8R\"P!n-wbfHU,#38@#6>eb4ICQq{xk|jf_\r\n\n--h-~cy~_k;\n\n"
+                            ))
+                            (RecordLit mempty)
+                            Nothing
+                            Nothing
+                      )
+                    ])))
+        , commentFormatIdempotent "bare CR in a record-literal field comment"
+            (RecordLit (Dhall.Map.fromList
+                [ ( ""
+                  , RecordField Nothing
+                        (RecordLit (Dhall.Map.fromList
+                            [("", field "--\1002867{c/cB7\r7\n\n" Time)]
+                        ))
+                        Nothing
+                        Nothing
+                  )
+                ]))
+        , commentFormatIdempotent "bare CR in a record-type field comment"
+            (Record (Dhall.Map.fromList
+                [("", field "--;~mUt!,s\rkZ5J\r\n\n--vV\r\n\n" NaturalSubtract)]
+            ))
+        ]
+  where
+    field commentSrc value =
+        RecordField Nothing value Nothing (Just (commentSrcSpan commentSrc))
+
+    commentSrcSpan commentSrc =
+        Src
+            (SourcePos "" (mkPos 1) (mkPos 1))
+            (SourcePos "" (mkPos 1) (mkPos 1))
+            commentSrc
+
+commentFormatIdempotent :: String -> Expr Src Import -> TestTree
+commentFormatIdempotent name expr =
+    Test.Tasty.HUnit.testCase name (do
+        let once = Format.format Unicode (Header "", expr)
         headerAndExpr <- Dhall.Core.throws (Dhall.Parser.exprAndHeaderFromText mempty once)
         Format.format Unicode headerAndExpr @?= once
     )
