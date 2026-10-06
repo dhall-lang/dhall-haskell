@@ -86,7 +86,7 @@ let
                     pkgsNew.haskell.lib.dontCheck drv;
 
                 failOnAllWarnings = drv:
-                  # GHCJS incorrectly detects non-exhaustive pattern matches
+                  # Legacy GHCJS 8.10. The JS backend lives in ./javascript.nix.
                   if compiler == "ghcjs"
                   then drv
                   else pkgsNew.haskell.lib.failOnAllWarnings drv;

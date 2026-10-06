@@ -1,3 +1,4 @@
+{-# LANGUAGE JavaScriptFFI     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dhall.Import.HTTP
@@ -10,14 +11,35 @@ import Control.Monad.IO.Class           (MonadIO (..))
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
-import Dhall.Core                       (URL (..), Expr (..))
-import Dhall.Import.Types               (Import, Status)
 import Dhall.Parser                     (Src)
 import Dhall.URL                        (renderURL)
+import GHC.JS.Prim                      (JSVal, fromJSString, toJSString)
+
+import Dhall.Core
+    ( Expr (..)
+    , Import (..)
+    , ImportHashed (..)
+    , ImportMode (..)
+    , ImportType (..)
+    , URL (..)
+    )
+import Dhall.Import.Types (Status)
 
 import qualified Data.Text          as Text
 import qualified Data.Text.Encoding as Text.Encoding
-import qualified JavaScript.XHR
+
+-- Returns "STATUS\\nBODY". An empty body still has the status line.
+foreign import javascript interruptible
+  "((url, $c) => {\
+  \  fetch(url).then(function (r) {\
+  \    return r.text().then(function (t) {\
+  \      $c(String(r.status) + '\\n' + t);\
+  \    });\
+  \  }).catch(function (e) {\
+  \    $c('0\\n' + String(e));\
+  \  });\
+  \})"
+  js_fetch :: JSVal -> IO JSVal
 
 fetchFromHttpUrl
     :: URL
@@ -25,28 +47,32 @@ fetchFromHttpUrl
     -> StateT Status IO Text.Text
 fetchFromHttpUrl childURL Nothing = do
     let childURLText = renderURL childURL
-
     let childURLString = Text.unpack childURLText
 
-    -- No need to add a CORS compliance check when using GHCJS.  The browser
-    -- will already check the CORS compliance of the following XHR
-    (statusCode, body) <- liftIO (JavaScript.XHR.get childURLText)
-
-    case statusCode of
-        200 -> return ()
-        _   -> fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
-
-    return body
+    -- The browser enforces CORS; no extra check is required here.
+    payload <- liftIO (fromJSString <$> js_fetch (toJSString childURLString))
+    let (code, rest) = break (== '\n') payload
+        body = case rest of
+            []     -> ""
+            (_:xs) -> xs
+    case reads code of
+        [(statusCode, "")] | statusCode == (200 :: Int) ->
+            return (Text.pack body)
+        [(statusCode, "")] ->
+            fail (childURLString <> " returned a non-200 status code: " <> show statusCode)
+        _ ->
+            fail (childURLString <> " fetch failed: " <> payload)
 fetchFromHttpUrl _ _ =
-    fail "Dhall does not yet support custom headers when built using GHCJS"
+    fail "Dhall does not yet support custom headers when built for JavaScript"
 
-fetchFromHTTPUrlBytes
+fetchFromHttpUrlBytes
     :: URL
     -> Maybe [(CI ByteString, ByteString)]
     -> StateT Status IO ByteString
-fetchFromHTTPUrlBytes childUrl mheader = do
-    text <- fetchFromHTTPUrl childUrl mheader
+fetchFromHttpUrlBytes childUrl mheader = do
+    text <- fetchFromHttpUrl childUrl mheader
     return (Text.Encoding.encodeUtf8 text)
 
 originHeadersFileExpr :: IO (Expr Src Import)
-originHeadersFileExpr = return Missing
+originHeadersFileExpr =
+    return (Embed (Import (ImportHashed Nothing Missing) Code))
