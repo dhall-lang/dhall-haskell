@@ -2864,10 +2864,10 @@ loadWithSource frozenImportResolutionMode expr₀ = case expr₀ of
       let handler e = throwM (SourcedException a (e :: MissingImports))
 
       (Note <$> pure a <*> loadWithSource frozenImportResolutionMode b) `catch` handler
-  Let a b              -> Let <$> bindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
-  Record m             -> Record <$> traverse (recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
-  RecordLit m          -> RecordLit <$> traverse (recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
-  Lam cs a b           -> Lam cs <$> functionBindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
+  Let a b              -> Let <$> Syntax.bindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
+  Record m             -> Record <$> traverse (Syntax.recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
+  RecordLit m          -> RecordLit <$> traverse (Syntax.recordFieldExprs (loadWithSource frozenImportResolutionMode)) m
+  Lam cs a b           -> Lam cs <$> Syntax.functionBindingExprs (loadWithSource frozenImportResolutionMode) a <*> loadWithSource frozenImportResolutionMode b
   Field a b            -> Field <$> loadWithSource frozenImportResolutionMode a <*> pure b
   expression           -> Syntax.unsafeSubExpressions (loadWithSource frozenImportResolutionMode) expression
 
