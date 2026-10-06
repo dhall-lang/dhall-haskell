@@ -704,10 +704,10 @@ loadImport import_ = do
                     loaded <- loadImportWithSemanticCache import_
                     case loaded of
                         LoadHole hole -> do
-                            zoom importHoles (State.modify (Dhall.Map.insert import_ hole))
+                            zoom importHoles (State.modify' (Dhall.Map.insert import_ hole))
                             return loaded
                         LoadOk sem -> do
-                            zoom cache (State.modify (Dhall.Map.insert import_ sem))
+                            zoom cache (State.modify' (Dhall.Map.insert import_ sem))
                             when _sharedEvaluation $ do
                                 ref <- ensureImportRef import_
                                 when _keepImportBodies $
@@ -783,7 +783,7 @@ ensureNormalized import_ ImportSemantics { importSemantics } = do
                 , importNormalizationStatus = AlreadyNormalized
                 }
 
-    zoom cache (State.modify (Dhall.Map.insert import_ normalizedSemantics))
+    zoom cache (State.modify' (Dhall.Map.insert import_ normalizedSemantics))
 
     return normalizedSemantics
 
@@ -942,7 +942,7 @@ applyStatusSubstitutions expression = do
             let cached =
                     Dhall.Substitution.resolveSubstitutions _substitutions
 
-            State.modify
+            State.modify'
                 (\s -> s { _resolvedSubstitutions = Just cached })
 
             return cached
@@ -1048,7 +1048,7 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
                     Status { _stack } <- State.get
                     throwMissingImport (Imported _stack err)
                 Right typ -> do
-                    zoom importTypes (State.modify (Dhall.Map.insert chained typ))
+                    zoom importTypes (State.modify' (Dhall.Map.insert chained typ))
                     return typ
 
 -- Check the "semi-semantic" disk cache, otherwise typecheck from scratch.
@@ -1118,7 +1118,7 @@ loadImportWithSemisemanticCache
             semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
 
             zoom merkleHashCache
-                (State.modify (Dhall.Map.insert import_ semisemanticHash))
+                (State.modify' (Dhall.Map.insert import_ semisemanticHash))
 
             mCached <-
                 zoom cacheWarning
@@ -1210,7 +1210,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash (Encoding.encodeUtf8 text)
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1226,7 +1226,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash bytes
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1260,7 +1260,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash (encodeExpression importSemantics)
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1458,7 +1458,7 @@ memoizedMerkleFingerprints = do
             return cached
         Nothing -> do
             let hashed = fingerprintStartingContext _startingContext
-            State.modify (\s -> s { _merkleContextFingerprint = Just hashed })
+            State.modify' (\s -> s { _merkleContextFingerprint = Just hashed })
             return hashed
 
     substitutionsHash <- case _merkleSubstitutionsFingerprint of
@@ -1466,7 +1466,7 @@ memoizedMerkleFingerprints = do
             return cached
         Nothing -> do
             let hashed = fingerprintSubstitutions _substitutions
-            State.modify (\s -> s { _merkleSubstitutionsFingerprint = Just hashed })
+            State.modify' (\s -> s { _merkleSubstitutionsFingerprint = Just hashed })
             return hashed
 
     return (contextHash, substitutionsHash)
