@@ -13,6 +13,8 @@
   its argument. Any combination of the three flags is allowed, and omitting
   one leaves that limit off. Hitting the allocation or time limit yields no
   partial normal form. Import resolution is not part of the time limit.
+  `dhall type`, `dhall repl`, and the default `dhall` command all honor these
+  flags (`dhall type` applies them to inference and type rendering).
 * The REPL keeps previous `:let` bindings in a `TypingContext` and type-checks
   them only once with their values kept. Each new REPL command
   type-checks and normalizes only the new expression rather than all previous `:let`s.

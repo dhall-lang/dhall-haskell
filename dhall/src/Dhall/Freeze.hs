@@ -31,10 +31,12 @@ module Dhall.Freeze
 
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
+import Data.Void           (Void)
 import Dhall               (EvaluateSettings)
 import Dhall.Pretty        (detectCharacterSet)
 import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 
+import Dhall.Parser      (Src)
 import Dhall.Syntax
     ( Expr (..)
     , Import (..)
@@ -183,6 +185,14 @@ freezeImportWithSettings
     -> FilePath
     -> Import
     -> IO Import
+integrityHashFallback
+    :: Maybe (Core.ReifiedNormalizer Void)
+    -> Expr Src Void
+    -> IO (Expr Void Void)
+integrityHashFallback customNormalizer expression =
+    Exception.evaluate
+        (Core.alphaNormalize (Core.normalizeWith customNormalizer expression))
+
 freezeImportWithSettings settings directory import_ = do
     let unprotectedImport =
             import_
@@ -194,13 +204,26 @@ freezeImportWithSettings settings directory import_ = do
 
     let status = Dhall.emptyStatusWithSettings settings directory
 
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+    let customNormalizer = view Dhall.normalizer settings
+
+    (expression, status') <-
+        State.runStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
 
     case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) expression of
         Left  exception -> Exception.throwIO exception
         Right _         -> return ()
 
-    let normalizedExpression = Core.alphaNormalize (Core.normalizeWith (view Dhall.normalizer settings) expression)
+    maybeSemantics <-
+        Dhall.Import.lookupCachedImportSemantics status' unprotectedImport
+
+    normalizedExpression <-
+        case maybeSemantics of
+            Just importSemantics ->
+                Dhall.Import.alphaBetaNormalForIntegrityHash
+                    customNormalizer
+                    importSemantics
+            Nothing ->
+                integrityHashFallback customNormalizer expression
 
     -- The semantic cache product is the encoded αβ-normal form.  Unhashed
     -- Code imports are no longer β-normalized by `loadWith`, so we must
