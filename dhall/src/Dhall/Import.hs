@@ -151,6 +151,7 @@ module Dhall.Import (
     , merkleHashCache
     , normalizer
     , startingContext
+    , typecheckWithAlreadyCheckedImports
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -1029,12 +1030,12 @@ cachedImportType
     -> ImportSemantics
     -> StateT Status IO (Expr Src Void)
 cachedImportType chained ImportSemantics { importSemantics = sem } = do
-    Status { _importTypes } <- State.get
+    Status { _importTypes, _startingContext } <- State.get
     case Dhall.Map.lookup chained _importTypes of
         Just typ ->
             return typ
         Nothing ->
-            case Dhall.TypeCheck.typeOf (Core.renote sem) of
+            case Dhall.TypeCheck.typeWith _startingContext (Core.renote sem :: Expr Src Void) of
                 -- A placeholder is not a type error to print on stderr.  Wrap
                 -- it like every other import failure so the collector can
                 -- substitute a placeholder instead of killing the process.
