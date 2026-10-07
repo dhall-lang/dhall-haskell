@@ -114,6 +114,7 @@ module Dhall.Import (
     , normalizeLoaded
     , normalizeLoadedCapped
     , withoutImportBodies
+    , withoutImportSources
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -421,10 +422,11 @@ stripAnsi (c : rest) = c : stripAnsi rest
 
 recordFetched :: Text -> Text -> StateT Status IO ()
 recordFetched location text = do
-    Status { _stack } <- State.get
+    Status { _stack, _keepImportSources } <- State.get
     let here = NonEmpty.head _stack
         source = ResolvedImportSource (Just text) location
-    zoom importSources (State.modify (Dhall.Map.insert here source))
+    when _keepImportSources
+        (zoom importSources (State.modify' (Dhall.Map.insert here source)))
 
 substitutePlaceholder
     :: Src

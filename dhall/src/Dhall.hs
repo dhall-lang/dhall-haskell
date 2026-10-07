@@ -294,6 +294,8 @@ resolveAndStatusWithSettings settings expression = do
 --   With a custom normalizer the returned 'Status' keeps no import bodies, so
 --   'Dhall.Import.normalizeLoaded' cannot evaluate the twin.  Normalize the
 --   inlined tree instead, as 'normalizeResolved' does.
+--
+--   The returned 'Status' keeps no source text in 'Dhall.Import.importSources'.
 resolveSharedWithSettings
     :: InputSettings
     -> Expr Src Import
@@ -307,8 +309,10 @@ resolveSharedWithSettings settings expression = do
             Nothing -> id
             Just _  -> Dhall.Import.withoutImportBodies
 
+    -- Only the LSP reads the fetched sources, and it builds its own 'Status'.
     let status =
-            keepBodies (emptyStatusWithSettings _evaluateSettings _rootDirectory)
+            Dhall.Import.withoutImportSources
+                (keepBodies (emptyStatusWithSettings _evaluateSettings _rootDirectory))
 
     let expression' =
             Dhall.Substitution.substitute
