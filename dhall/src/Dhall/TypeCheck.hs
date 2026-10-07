@@ -725,6 +725,9 @@ infer typer = loop
 
             return VText
 
+        TextEqual ->
+            return (VText ~> VText ~> VBool)
+
         TextReplace ->
             return
                 (   VHPi "needle" VText  (\_needle ->
