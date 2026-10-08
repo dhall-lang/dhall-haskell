@@ -940,7 +940,8 @@ applyStatusSubstitutions expression = do
             return cached
         Nothing -> do
             let cached =
-                    Dhall.Substitution.resolveSubstitutions _substitutions
+                    Dhall.Substitution.resolveSubstitutions
+                        (fmap Core.denote _substitutions)
 
             State.modify'
                 (\s -> s { _resolvedSubstitutions = Just cached })
@@ -1048,8 +1049,9 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
                     Status { _stack } <- State.get
                     throwMissingImport (Imported _stack err)
                 Right typ -> do
-                    zoom importTypes (State.modify' (Dhall.Map.insert chained typ))
-                    return typ
+                    let denoted = Core.denote typ
+                    zoom importTypes (State.modify' (Dhall.Map.insert chained denoted))
+                    return denoted
 
 -- Check the "semi-semantic" disk cache, otherwise typecheck from scratch.
 --
