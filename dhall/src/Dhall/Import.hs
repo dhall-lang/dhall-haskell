@@ -113,8 +113,6 @@ module Dhall.Import (
     , loadWithShared
     , normalizeLoaded
     , normalizeLoadedCapped
-    , withoutImportBodies
-    , withoutImportSources
     , localToPath
     , hashExpression
     , hashExpressionToCode
@@ -759,11 +757,6 @@ replaceImportBody ref body = do
     Status { _keepImportBodies } <- State.get
     when _keepImportBodies
         (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
-
--- | Do not keep the shared import bodies.  'normalizeLoaded' cannot be used
---   with the resulting 'Status'.
-withoutImportBodies :: Status -> Status
-withoutImportBodies status = status { _keepImportBodies = False }
 
 -- | Reuse an import-free expression as a twin.
 --
@@ -2394,7 +2387,7 @@ sharedEnvironment Status { _startingContext, _importBodies } = env
             Just value ->
                 value
             Nothing ->
-                error "sharedEnvironment: shared import has no body (were import bodies dropped with 'withoutImportBodies'?)"
+                error "sharedEnvironment: shared import has no body (were import bodies dropped with '_keepImportBodies = False'?)"
 
 -- | Resolve all imports within an expression
 --

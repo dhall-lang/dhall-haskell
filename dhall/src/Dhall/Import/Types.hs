@@ -238,8 +238,8 @@ data Status = Status
     --   instead of holding the source text of every fetched file.
 
     , _keepImportBodies :: Bool
-    -- ^ 'False' when the caller will not evaluate through 'normalizeLoaded'
-    --   (for example because it normalizes with a custom normalizer).
+    -- ^ 'False' when not going through 'normalizeLoaded',
+    --   for example when normalizing with a custom normalizer.
     --   '_importBodies' then stays empty: it would hold a second copy of
     --   every imported file's syntax.
 

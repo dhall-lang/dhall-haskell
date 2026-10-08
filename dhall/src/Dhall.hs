@@ -67,6 +67,7 @@ module Dhall
 import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
+import Data.Maybe             (isNothing)
 import Data.Void              (Void, absurd)
 import Dhall.Import           (ImportRef, Imported (..), Status)
 import Dhall.Parser           (Src (..))
@@ -290,12 +291,6 @@ resolveAndStatusWithSettings settings expression = do
 --
 --   The first expression is the fully inlined tree.  The second refers to each
 --   import by an 'ImportRef', and every use of an import is the same reference.
---
---   With a custom normalizer the returned 'Status' keeps no import bodies, so
---   'Dhall.Import.normalizeLoaded' cannot evaluate the twin.  Normalize the
---   inlined tree instead, as 'normalizeResolved' does.
---
---   The returned 'Status' keeps no source text in 'Dhall.Import.importSources'.
 resolveSharedWithSettings
     :: InputSettings
     -> Expr Src Import
@@ -305,14 +300,14 @@ resolveSharedWithSettings settings expression = do
 
     -- With a custom normalizer, 'normalizeResolved' normalizes the inlined
     -- tree, so the shared bodies would only be a second copy of every import.
-    let keepBodies = case view normalizer settings of
-            Nothing -> id
-            Just _  -> Dhall.Import.withoutImportBodies
+    let keepBodies = isNothing (view normalizer settings)
 
     -- Only the LSP reads the fetched sources, and it builds its own 'Status'.
     let status =
-            Dhall.Import.withoutImportSources
-                (keepBodies (emptyStatusWithSettings _evaluateSettings _rootDirectory))
+            (emptyStatusWithSettings _evaluateSettings _rootDirectory)
+                { Dhall.Import._keepImportBodies = keepBodies
+                , Dhall.Import._keepImportSources = False
+                }
 
     let expression' =
             Dhall.Substitution.substitute
