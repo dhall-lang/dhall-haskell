@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -322,17 +323,17 @@ zeroPrefixedNaturalLiteral = do
     binary <|> hexadecimal <|> afterZero
   where
     afterZero = do
-        extra <- Dhall.Parser.Combinators.takeWhile digit
+        extra <- spanWhile digit
         if Data.Text.null extra
             then pure 0
             else fail "Natural literals cannot have leading zeros"
     binary = do
         _ <- char 'b'
-        digits <- Dhall.Parser.Combinators.takeWhile1 isBinDigit
+        digits <- spanWhile1 isBinDigit
         return (naturalFromBinaryDigits digits)
     hexadecimal = do
         _ <- char 'x'
-        digits <- Dhall.Parser.Combinators.takeWhile1 hexdig
+        digits <- spanWhile1 hexdig
         return (naturalFromHexadecimalDigits digits)
     isBinDigit c = c == '0' || c == '1'
 
@@ -356,7 +357,7 @@ nonZeroDecimalNaturalLiteral =
 decimalNatural :: Parser Natural
 decimalNatural = do
     _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
-    digits <- Dhall.Parser.Combinators.takeWhile1 digit
+    digits <- spanWhile1 digit
     return (naturalFromDecimalDigits digits)
 
 -- | Convert a non-empty decimal digit run with divide-and-conquer.
@@ -585,38 +586,33 @@ lineComment = try (lineCommentPrefix <* endOfLine)
 blockComment :: Parser Text
 blockComment = do
     _ <- text "{-"
-    c <- blockCommentContinue
-    pure ("{-" <> c <> "-}")
+    input <- Text.Megaparsec.getInput
+    case takeBlockComment input of
+        Nothing -> fail "unterminated block comment"
+        Just n  -> do
+            skipChunk (Data.Text.take n input)
+            return ""
 
-blockCommentChunk :: Parser Text
-blockCommentChunk =
-    choice
-        [ blockComment  -- Nested block comment
-        , characters
-        , character
-        , endOfLine
-        ]
+-- Nested block comments are scanned as a length, then dropped in one slice,
+-- so the body is never concatenated.
+takeBlockComment :: Text -> Maybe Int
+takeBlockComment = go 0 1
   where
-    characters = (Dhall.Parser.Combinators.takeWhile1 predicate)
-      where
-        predicate c =
-                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
-            ||  c == '\n'
-            ||  c == '\t'
-
-    character = (Dhall.Parser.Combinators.satisfy predicate)
-      where
-        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-blockCommentContinue :: Parser Text
-blockCommentContinue = endOfComment <|> continue
-  where
-    endOfComment = void (text "-}") *> pure ""
-
-    continue = do
-        c <- blockCommentChunk
-        c' <- blockCommentContinue
-        pure (c <> c')
+    go :: Int -> Int -> Text -> Maybe Int
+    go !n !d t
+        | d == 0               = Just n
+        | Data.Text.null t     = Nothing
+        | Data.Text.isPrefixOf "{-" t =
+            go (n + 2) (d + 1) (Data.Text.drop 2 t)
+        | Data.Text.isPrefixOf "-}" t =
+            go (n + 2) (d - 1) (Data.Text.drop 2 t)
+        | otherwise            =
+            -- Skip a delimiter-free run in one slice. Walking char-by-char
+            -- with Text.drop 1 allocates a header per character.
+            let (run, rest) = Data.Text.break (\c -> c == '-' || c == '{') t
+            in  if Data.Text.null run
+                    then go (n + 1) d (Data.Text.drop 1 t)
+                    else go (n + Data.Text.length run) d rest
 
 simpleLabel :: Bool -> Parser Text
 simpleLabel allowReserved = try $ do
