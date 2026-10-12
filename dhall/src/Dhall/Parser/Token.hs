@@ -582,7 +582,11 @@ lineCommentPrefix = do
 lineComment :: Parser Text
 lineComment = try (lineCommentPrefix <* endOfLine)
 
--- | Parsed text doesn't include opening braces
+-- | Parse a block comment, including the opening @{-@ and closing @-}@.
+--
+-- @dhall-docs@ inspects the returned text for @{-|@ markers.  The
+-- concatenation is lazy so the whitespace parser, which @void@s this
+-- result, does not copy the body.
 blockComment :: Parser Text
 blockComment = do
     _ <- text "{-"
@@ -590,8 +594,9 @@ blockComment = do
     case takeBlockComment input of
         Nothing -> fail "unterminated block comment"
         Just n  -> do
-            skipChunk (Data.Text.take n input)
-            return ""
+            let chunk = Data.Text.take n input
+            skipChunk chunk
+            return ("{-" <> chunk)
 
 -- Nested block comments are scanned as a length, then dropped in one slice,
 -- so the body is never concatenated.
