@@ -74,7 +74,8 @@ srcAnd parser = do
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (!tokens, !e) <- Text.Megaparsec.match parser
+    -- Do not force `e`: large Natural literals must stay lazy at WHNF parse.
+    (!tokens, e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
@@ -950,7 +951,7 @@ parsers embedded = Parsers{..}
                 return (Chunks [(mempty, e)] mempty)
 
             unescapedCharacterFast = do
-                t <- Text.Megaparsec.takeWhile1P Nothing predicate
+                t <- spanWhile1 predicate
                 return (Chunks [] t)
               where
                 predicate c =
@@ -1070,7 +1071,7 @@ parsers embedded = Parsers{..}
                     return mempty
 
                 unescapedCharacterFast = do
-                    a <- Text.Megaparsec.takeWhile1P Nothing predicate
+                    a <- spanWhile1 predicate
                     b <- singleQuoteContinue
                     return (Chunks [] a <> b)
                   where

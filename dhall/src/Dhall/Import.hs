@@ -129,7 +129,6 @@ module Dhall.Import (
     , ImportHole (..)
     , SemanticCacheMode(..)
     , Chained (..)
-    , chainedImport
     , chainedFromLocalHere
     , chainedChangeMode
     , emptyStatus
