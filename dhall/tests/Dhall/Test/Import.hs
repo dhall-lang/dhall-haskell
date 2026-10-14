@@ -132,6 +132,7 @@ successTest prefix = do
                     status'
 
         let usesCache = [ "hashFromCache"
+                        , "hashFromSourceCache"
                         , "unit/asLocation/Hash"
                         , "unit/IgnorePoisonedCache"
                         , "unit/DontCacheIfHash"

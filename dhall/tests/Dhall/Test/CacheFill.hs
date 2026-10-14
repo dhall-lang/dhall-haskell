@@ -39,6 +39,8 @@ getTests = return
         , testCase "Hash on successful right branch is ignored" hashOnRightIsIgnoredTest
         , testCase "Opportunistic fill normalizes unhashed Code" fillFromUnnormalizedImportTest
         , testCase "Matching fill returns the semantic-cache normal form" fillReturnsNormalizedTermTest
+        , testCase "Source fill then Source cache hit" sourceFillThenHitTest
+        , testCase "Source hash mismatch does not fill cache" sourceHashMismatchDoesNotFillTest
         ])
 
 -- | Isolate each test in a fresh semantic cache directory.
@@ -354,3 +356,61 @@ fillReturnsNormalizedTermTest = withTempCache $ \_cacheDir -> do
         (Core.alphaNormalize (Core.denote resolved :: Core.Expr Void Void))
 
     Directory.removeFile tempFile
+
+-- | Opportunistic fill also applies to @missing sha256:… as Source ? ... as Source@.
+sourceFillThenHitTest :: IO ()
+sourceFillThenHitTest = withTempCache $ \cacheDir -> do
+    sourceFile <- writeTempImport "{ x = 1, y = 2 }"
+    fallbackFile <- writeTempImport "{ x = 9, y = 9 }"
+    let sourcePath = relativeImport sourceFile
+        fallbackPath = relativeImport fallbackFile
+        sourceExprText = sourcePath <> " as Source"
+        fallbackExprText = fallbackPath <> " as Source"
+
+    sourceExpr <- inputExprNear sourceFile sourceExprText
+    let hashCode = Import.hashExpressionToCode (Core.denote sourceExpr)
+        cacheFile = semanticCacheFile cacheDir sourceExpr
+
+    step1 <- inputExprNear sourceFile ("missing " <> hashCode <> " as Source ? " <> sourceExprText)
+    assertNormalizedEqual "Source fallback should resolve" sourceExpr step1
+
+    cachedAfterFill <- Directory.doesFileExist cacheFile
+    assertBool "Source fallback should write the semantic cache" cachedAfterFill
+
+    step2 <- inputExprNear sourceFile ("missing " <> hashCode <> " as Source ? " <> fallbackExprText)
+    assertNormalizedEqual
+        "cached Source product should win over a new fallback"
+        sourceExpr
+        step2
+
+    Directory.removeFile sourceFile
+    Directory.removeFile fallbackFile
+
+-- | Mismatched hash on @as Source@ must not write or use a semantic cache entry.
+sourceHashMismatchDoesNotFillTest :: IO ()
+sourceHashMismatchDoesNotFillTest = withTempCache $ \cacheDir -> do
+    sourceFile <- writeTempImport "{ x = 1, y = 2 }"
+    fallbackFile <- writeTempImport "{ x = 9, y = 9 }"
+    let sourcePath = relativeImport sourceFile
+        fallbackPath = relativeImport fallbackFile
+        sourceExprText = sourcePath <> " as Source"
+        fallbackExprText = fallbackPath <> " as Source"
+        wrongHashCode =
+            "sha256:0000000000000000000000000000000000000000000000000000000011111111"
+        wrongCacheFile =
+            cacheDir </> "dhall" </>
+            "122000000000000000000000000000000000000000000000000000000011111111"
+
+    sourceExpr <- inputExprNear sourceFile sourceExprText
+    step1 <- inputExprNear sourceFile ("missing " <> wrongHashCode <> " as Source ? " <> sourceExprText)
+    assertNormalizedEqual "mismatched Source fallback should still resolve" sourceExpr step1
+
+    cachedWrongHash <- Directory.doesFileExist wrongCacheFile
+    assertBool "mismatched Source hash must not fill cache" (not cachedWrongHash)
+
+    fallbackExpr <- inputExprNear sourceFile fallbackExprText
+    step2 <- inputExprNear sourceFile ("missing " <> wrongHashCode <> " as Source ? " <> fallbackExprText)
+    assertNormalizedEqual "without Source fill, a new fallback should be used" fallbackExpr step2
+
+    Directory.removeFile sourceFile
+    Directory.removeFile fallbackFile
