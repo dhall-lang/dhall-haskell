@@ -57,8 +57,8 @@ library
     , dhall-json           >= 1.4      && < 1.8
     , exceptions           >= 0.10     && < 0.11
     , filepath             >= 1.4.2    && < 1.6
-    , lsp                  >= 2.1.0.0  && < 2.9
-    , lsp-types            >= 2.0.1    && < 2.5
+    , lsp                  >= 2.4.0.0  && < 2.9
+    , lsp-types            >= 2.1.1.0  && < 2.5
     , lens                 >= 4.16.1   && < 5.4
     -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
     , megaparsec           >= 7.0.2    && < 10
@@ -116,10 +116,10 @@ Test-Suite tests
         data-default      >= 0.7.1.1  && < 0.9 ,
         dhall             >= 1.38.0   && < 1.43,
         dhall-lsp-server  ,
-        lsp-types         >= 2.0.1    && < 2.5 ,
+        lsp-types         >= 2.1.1.0  && < 2.5 ,
         hspec             >= 2.7      && < 2.12,
         lens              >= 4.16.1   && < 5.4 ,
-        lsp-test          >= 0.15.0.0 && < 0.19,
+        lsp-test          >= 0.17.0.0 && < 0.19,
         parser-combinators >= 1.0.0 && < 1.4,
         tasty             >= 0.11.2   && < 1.6 ,
         row-types         >= 1.0      && < 1.2 ,

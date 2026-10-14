@@ -11,6 +11,9 @@ packages:
   - dhall-openapi
   - dhall-toml
   - dhall-yaml
+allow-newer: true
+allow-newer-deps:
+  - dhall-lsp-server
 extra-deps:
   - ansi-wl-pprint-1.0.2@sha256:b817853b5310b8e7847469847608b664c3e75b4b30c332f2cb8c0d00751ef9c1,1915
   - co-log-core-0.3.2.0
