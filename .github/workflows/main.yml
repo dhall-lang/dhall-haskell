@@ -73,6 +73,10 @@ jobs:
           fi
           echo "::debug::'pkg-config libsodium' output:"
           pkg-config --print-errors --libs libsodium || true
+      # Workaround for macos-26 issue with command line tools, see https://github.com/actions/runner-images/issues/14940 and https://github.com/actions/runner-images/pull/15002
+      - name: "Use Command Line Tools linker"
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
       - name: "Build"
         shell: bash
         run: |
