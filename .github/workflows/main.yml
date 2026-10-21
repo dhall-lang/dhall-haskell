@@ -65,6 +65,10 @@ jobs:
             ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      # Workaround for Ubuntu 26.04 that no longer has ld.gold but Stack's GHC bindist thinks it's still there (cached from Ubuntu 24.04)
+      - name: "Install gold linker"
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y binutils-gold
       - name: "Install libsodium"
         shell: bash
         run: |
