@@ -29,14 +29,14 @@ pattern `import_overhead.import_alt.cold` does not select it.
 
 | Bench | What it times |
 | --- | --- |
-| `import_overhead.custom_normalizer.cold.default` / `.warm.default` | 150 one-line files exporting `0`, each imported twice. Default normalizer (shared twin). |
+| `import_overhead.custom_normalizer.cold.default` / `.warm.default` | 700 one-line files exporting `0`, each imported twice. Default normalizer (shared twin). |
 | `import_overhead.custom_normalizer.cold.custom` / `.warm.custom` | Same tree. Normalizer rewrites `NaturalLit 0` to `NaturalLit 7`, so normalization walks the inlined tree. Separate warm cache from `.default`. |
-| `import_overhead.import_alt.cold` / `.warm` | 40 files of `missing sha256:… ? ./real.dhall`. The hash is the semantic hash of `0`, so resolution succeeds and a cold run fills the semantic cache from the fallback. |
+| `import_overhead.import_alt.cold` / `.warm` | 300 files of `missing sha256:… ? ./real.dhall`. The hash is the semantic hash of `0`, so resolution succeeds and a cold run fills the semantic cache from the fallback. |
 | `import_overhead.import_alt.typecheck` | Typecheck only, on a tree resolved during prep. |
 | `import_overhead.root_substitutions.resolve` | `resolveWithSettings` on one expression and 500 closed substitution keys, one of which is used. No imports. |
-| `import_overhead.starting_context.cold` / `.warm` | 100 starting-context binders (`ctx000` … `ctx099 : Natural`) and 40 imported files that mention `ctx000`. |
-| `import_overhead.projection.end_to_end_cold` | 40 imported 8-field records. The root names every import and evaluates one field (`Natural/show rs.r00.f00`). |
-| `import_overhead.force_all.end_to_end_cold` | The same 40 records, evaluated as a record of every import. |
+| `import_overhead.starting_context.cold` / `.warm` | 100 starting-context binders (`ctx000` … `ctx099 : Natural`) and 370 imported files that mention `ctx000`. |
+| `import_overhead.projection.end_to_end_cold` | 200 imported 8-field records. The root names every import and evaluates one field (`Natural/show rs.r000.f00`). |
+| `import_overhead.force_all.end_to_end_cold` | The same 200 records, evaluated as a record of every import. |
 
 Cold benches use a fresh `XDG_CACHE_HOME` per sample. Warm benches reuse one cache directory filled by a single prep run.
 

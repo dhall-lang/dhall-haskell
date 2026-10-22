@@ -32,16 +32,16 @@ import qualified System.IO.Temp as Temp
 import System.FilePath ((</>))
 
 customNormalizerCount :: Int
-customNormalizerCount = 150
+customNormalizerCount = 700
 
 importAltCount :: Int
-importAltCount = 40
+importAltCount = 300
 
 contextBinderCount :: Int
 contextBinderCount = 100
 
 contextFileCount :: Int
-contextFileCount = 40
+contextFileCount = 370
 
 projectionDirectory :: FilePath
 projectionDirectory = "benchmark/evaluation/import_overhead/projection"
