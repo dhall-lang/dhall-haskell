@@ -27,6 +27,7 @@ Extra-Source-Files:
     CHANGELOG.md
     benchmark/deep-nested-large-record/**/*.dhall
     benchmark/evaluation/diamond_import/**/*.dhall
+    benchmark/evaluation/import_overhead/**/*.dhall
     benchmark/evaluation/diamond_import_transitive/**/*.dhall
     benchmark/evaluation/k8s/*.dhall
     benchmark/evaluation/large1/**/*.dhall
@@ -541,6 +542,7 @@ Benchmark evaluation
     Main-Is: Main.hs
     Other-Modules:
         Bench.Common
+        Bench.ImportOverhead
         Bench.ImportTrees
         Bench.Semisemantic
         Bench.Substitutions

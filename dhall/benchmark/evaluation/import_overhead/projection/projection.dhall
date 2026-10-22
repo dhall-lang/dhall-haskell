@@ -1,0 +1,44 @@
+let rs =
+      { r00 = ./r00.dhall
+      , r01 = ./r01.dhall
+      , r02 = ./r02.dhall
+      , r03 = ./r03.dhall
+      , r04 = ./r04.dhall
+      , r05 = ./r05.dhall
+      , r06 = ./r06.dhall
+      , r07 = ./r07.dhall
+      , r08 = ./r08.dhall
+      , r09 = ./r09.dhall
+      , r10 = ./r10.dhall
+      , r11 = ./r11.dhall
+      , r12 = ./r12.dhall
+      , r13 = ./r13.dhall
+      , r14 = ./r14.dhall
+      , r15 = ./r15.dhall
+      , r16 = ./r16.dhall
+      , r17 = ./r17.dhall
+      , r18 = ./r18.dhall
+      , r19 = ./r19.dhall
+      , r20 = ./r20.dhall
+      , r21 = ./r21.dhall
+      , r22 = ./r22.dhall
+      , r23 = ./r23.dhall
+      , r24 = ./r24.dhall
+      , r25 = ./r25.dhall
+      , r26 = ./r26.dhall
+      , r27 = ./r27.dhall
+      , r28 = ./r28.dhall
+      , r29 = ./r29.dhall
+      , r30 = ./r30.dhall
+      , r31 = ./r31.dhall
+      , r32 = ./r32.dhall
+      , r33 = ./r33.dhall
+      , r34 = ./r34.dhall
+      , r35 = ./r35.dhall
+      , r36 = ./r36.dhall
+      , r37 = ./r37.dhall
+      , r38 = ./r38.dhall
+      , r39 = ./r39.dhall
+      }
+
+in  Natural/show rs.r00.f00
