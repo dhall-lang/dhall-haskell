@@ -53,6 +53,7 @@ module Dhall
     , resolveWithSettings
     , resolveAndStatusWithSettings
     , resolveSharedWithSettings
+    , resolveAndTypecheckWithSettings
     , emptyStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
@@ -66,6 +67,7 @@ module Dhall
 import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
+import Data.Maybe             (isNothing)
 import Data.Void              (Void, absurd)
 import Dhall.Import           (ImportRef, Imported (..), Status)
 import Dhall.Parser           (Src (..))
@@ -296,7 +298,16 @@ resolveSharedWithSettings
 resolveSharedWithSettings settings expression = do
     let InputSettings{..} = settings
 
-    let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
+    -- With a custom normalizer, 'normalizeResolved' normalizes the inlined
+    -- tree, so the shared bodies would only be a second copy of every import.
+    let keepBodies = isNothing (view normalizer settings)
+
+    -- Only the LSP reads the fetched sources, and it builds its own 'Status'.
+    let status =
+            (emptyStatusWithSettings _evaluateSettings _rootDirectory)
+                { Dhall.Import._keepImportBodies = keepBodies
+                , Dhall.Import._keepImportSources = False
+                }
 
     let expression' =
             Dhall.Substitution.substitute
@@ -307,6 +318,35 @@ resolveSharedWithSettings settings expression = do
         State.runStateT (Dhall.Import.loadWithShared expression') status
 
     pure (resolved, shared, status')
+
+-- | Resolve imports and type-check the result.
+--
+--   Every imported file is already type-checked while its imports are
+--   resolved, so those results are reused instead of type-checking the inlined
+--   tree again.  If an import is not cached (for example the unused side of
+--   @?@), the inlined tree is checked as before.
+--
+--   Returns the inlined expression and its type.
+resolveAndTypecheckWithSettings
+    :: InputSettings
+    -> Expr Src Import
+    -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
+resolveAndTypecheckWithSettings settings expression = do
+    (resolved, _, status) <- resolveSharedWithSettings settings expression
+
+    checked <-
+        State.evalStateT
+            (Dhall.Import.typecheckWithAlreadyCheckedImports
+                (view startingContext settings)
+                expression
+            )
+            status
+
+    let typed = case checked of
+            Just result -> result
+            Nothing     -> Dhall.TypeCheck.typeWith (view startingContext settings) resolved
+
+    pure (resolved, typed)
 
 -- | Normalize after resolution.  A custom normalizer sees the inlined tree.
 --   Otherwise each import is evaluated once through the shared twin.

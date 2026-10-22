@@ -151,6 +151,7 @@ module Dhall.Import (
     , merkleHashCache
     , normalizer
     , startingContext
+    , typecheckWithAlreadyCheckedImports
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -419,10 +420,11 @@ stripAnsi (c : rest) = c : stripAnsi rest
 
 recordFetched :: Text -> Text -> StateT Status IO ()
 recordFetched location text = do
-    Status { _stack } <- State.get
+    Status { _stack, _keepImportSources } <- State.get
     let here = NonEmpty.head _stack
         source = ResolvedImportSource (Just text) location
-    zoom importSources (State.modify (Dhall.Map.insert here source))
+    when _keepImportSources
+        (zoom importSources (State.modify' (Dhall.Map.insert here source)))
 
 substitutePlaceholder
     :: Src
@@ -686,7 +688,7 @@ chainImport (Chained parent) child =
 --   cache already.
 loadImport :: Chained -> StateT Status IO LoadResult
 loadImport import_ = do
-    Status { _cache, _importHoles, _sharedEvaluation } <- State.get
+    Status { _cache, _importHoles, _sharedEvaluation, _keepImportBodies } <- State.get
 
     case Dhall.Map.lookup import_ _importHoles of
         Just hole ->
@@ -702,13 +704,14 @@ loadImport import_ = do
                     loaded <- loadImportWithSemanticCache import_
                     case loaded of
                         LoadHole hole -> do
-                            zoom importHoles (State.modify (Dhall.Map.insert import_ hole))
+                            zoom importHoles (State.modify' (Dhall.Map.insert import_ hole))
                             return loaded
                         LoadOk sem -> do
-                            zoom cache (State.modify (Dhall.Map.insert import_ sem))
+                            zoom cache (State.modify' (Dhall.Map.insert import_ sem))
                             when _sharedEvaluation $ do
                                 ref <- ensureImportRef import_
-                                rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
+                                when _keepImportBodies $
+                                    rememberImportBody ref (retwin (Core.renote (importSemantics sem)))
                             return loaded
 
 -- | The reference used for this import in the shared evaluation environment.
@@ -730,12 +733,13 @@ ensureImportRef chained = do
 -- | Record the shared body unless a previous path already chose one.
 rememberImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
 rememberImportBody ref body = do
-    Status { _importBodies } <- State.get
+    Status { _importBodies, _keepImportBodies } <- State.get
     case Dhall.Map.lookup ref _importBodies of
         Just _ ->
             return ()
         Nothing ->
-            zoom importBodies (State.modify' (Dhall.Map.insert ref body))
+            when _keepImportBodies
+                (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
 
 -- | Record the twin, after substitutions, when this load will be evaluated
 --   through 'normalizeLoaded'.  A plain 'loadWith' skips this.
@@ -749,8 +753,10 @@ rememberSharedTwin chained twinExpr = do
 
 -- | Replace the shared body.  Hashed imports do this with the normal form.
 replaceImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
-replaceImportBody ref body =
-    zoom importBodies (State.modify' (Dhall.Map.insert ref body))
+replaceImportBody ref body = do
+    Status { _keepImportBodies } <- State.get
+    when _keepImportBodies
+        (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
 
 -- | Reuse an import-free expression as a twin.
 --
@@ -777,7 +783,7 @@ ensureNormalized import_ ImportSemantics { importSemantics } = do
                 , importNormalizationStatus = AlreadyNormalized
                 }
 
-    zoom cache (State.modify (Dhall.Map.insert import_ normalizedSemantics))
+    zoom cache (State.modify' (Dhall.Map.insert import_ normalizedSemantics))
 
     return normalizedSemantics
 
@@ -934,9 +940,10 @@ applyStatusSubstitutions expression = do
             return cached
         Nothing -> do
             let cached =
-                    Dhall.Substitution.resolveSubstitutions _substitutions
+                    Dhall.Substitution.resolveSubstitutions
+                        (fmap Core.denote _substitutions)
 
-            State.modify
+            State.modify'
                 (\s -> s { _resolvedSubstitutions = Just cached })
 
             return cached
@@ -1029,12 +1036,12 @@ cachedImportType
     -> ImportSemantics
     -> StateT Status IO (Expr Src Void)
 cachedImportType chained ImportSemantics { importSemantics = sem } = do
-    Status { _importTypes } <- State.get
+    Status { _importTypes, _startingContext } <- State.get
     case Dhall.Map.lookup chained _importTypes of
         Just typ ->
             return typ
         Nothing ->
-            case Dhall.TypeCheck.typeOf (Core.renote sem) of
+            case Dhall.TypeCheck.typeWith _startingContext (Core.renote sem :: Expr Src Void) of
                 -- A placeholder is not a type error to print on stderr.  Wrap
                 -- it like every other import failure so the collector can
                 -- substitute a placeholder instead of killing the process.
@@ -1042,8 +1049,9 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
                     Status { _stack } <- State.get
                     throwMissingImport (Imported _stack err)
                 Right typ -> do
-                    zoom importTypes (State.modify (Dhall.Map.insert chained typ))
-                    return typ
+                    let denoted = Core.denote typ
+                    zoom importTypes (State.modify' (Dhall.Map.insert chained denoted))
+                    return denoted
 
 -- Check the "semi-semantic" disk cache, otherwise typecheck from scratch.
 --
@@ -1112,7 +1120,7 @@ loadImportWithSemisemanticCache
             semisemanticHash <- computeMerkleSemisemanticHash import_ parsedImport
 
             zoom merkleHashCache
-                (State.modify (Dhall.Map.insert import_ semisemanticHash))
+                (State.modify' (Dhall.Map.insert import_ semisemanticHash))
 
             mCached <-
                 zoom cacheWarning
@@ -1204,7 +1212,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash (Encoding.encodeUtf8 text)
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1220,7 +1228,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash bytes
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1254,7 +1262,7 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
 
     let edgeHash = Dhall.Crypto.sha256Hash (encodeExpression importSemantics)
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return
         ( LoadOk ImportSemantics
@@ -1452,7 +1460,7 @@ memoizedMerkleFingerprints = do
             return cached
         Nothing -> do
             let hashed = fingerprintStartingContext _startingContext
-            State.modify (\s -> s { _merkleContextFingerprint = Just hashed })
+            State.modify' (\s -> s { _merkleContextFingerprint = Just hashed })
             return hashed
 
     substitutionsHash <- case _merkleSubstitutionsFingerprint of
@@ -1460,7 +1468,7 @@ memoizedMerkleFingerprints = do
             return cached
         Nothing -> do
             let hashed = fingerprintSubstitutions _substitutions
-            State.modify (\s -> s { _merkleSubstitutionsFingerprint = Just hashed })
+            State.modify' (\s -> s { _merkleSubstitutionsFingerprint = Just hashed })
             return hashed
 
     return (contextHash, substitutionsHash)
@@ -2381,7 +2389,7 @@ sharedEnvironment Status { _startingContext, _importBodies } = env
             Just value ->
                 value
             Nothing ->
-                error "sharedEnvironment: shared import has no body"
+                error "sharedEnvironment: shared import has no body (were import bodies dropped with '_keepImportBodies = False'?)"
 
 -- | Resolve all imports within an expression
 --

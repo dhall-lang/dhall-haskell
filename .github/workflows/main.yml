@@ -65,6 +65,10 @@ jobs:
             ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      # Workaround for Ubuntu 26.04 that no longer has ld.gold but Stack's GHC bindist thinks it's still there (cached from Ubuntu 24.04)
+      - name: "Install gold linker"
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y binutils-gold
       - name: "Install libsodium"
         shell: bash
         run: |
@@ -73,6 +77,10 @@ jobs:
           fi
           echo "::debug::'pkg-config libsodium' output:"
           pkg-config --print-errors --libs libsodium || true
+      # Workaround for macos-26 issue with command line tools, see https://github.com/actions/runner-images/issues/14940 and https://github.com/actions/runner-images/pull/15002
+      - name: "Use Command Line Tools linker"
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
       - name: "Build"
         shell: bash
         run: |
