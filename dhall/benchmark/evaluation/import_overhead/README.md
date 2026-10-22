@@ -4,8 +4,8 @@ Fixtures for the cost of data retained during import resolution: the shared
 import twin, import alternatives, root substitutions, a large starting
 context, and lazy versus forced import bodies.
 
-Generated trees are built during prep and are not committed. The projection
-pair under `projection/` is committed so the CLI timings have a stable path.
+Generated trees are built during prep and are not committed. Prep always
+rewrites `projection/`, including when those files are already there.
 
 Run one group at a time, from `dhall/`:
 
@@ -35,14 +35,14 @@ pattern `import_overhead.import_alt.cold` does not select it.
 | `import_overhead.import_alt.typecheck` | Typecheck only, on a tree resolved during prep. |
 | `import_overhead.root_substitutions.resolve` | `resolveWithSettings` on one expression and 500 closed substitution keys, one of which is used. No imports. |
 | `import_overhead.starting_context.cold` / `.warm` | 100 starting-context binders (`ctx000` … `ctx099 : Natural`) and 370 imported files that mention `ctx000`. |
-| `import_overhead.projection.end_to_end_cold` | 200 imported 8-field records. The root names every import and evaluates one field (`Natural/show rs.r000.f00`). |
-| `import_overhead.force_all.end_to_end_cold` | The same 200 records, evaluated as a record of every import. |
+| `import_overhead.projection.end_to_end_cold` | 200 imported 8-field records, generated into `projection/` during prep. The root names every import and evaluates one field (`Natural/show rs.r000.f00`). |
+| `import_overhead.force_all.end_to_end_cold` | The same generated records, evaluated as a record of every import. |
 
 Cold benches use a fresh `XDG_CACHE_HOME` per sample. Warm benches reuse one cache directory filled by a single prep run.
 
 ## CLI (not a tasty group)
 
-Same projection file, from `dhall/`. These are one-shot `+RTS -s` timings, not tasty-bench groups:
+Same generated projection file, from `dhall/`, after a projection or force-all prep has written `projection/`. These are one-shot `+RTS -s` timings, not tasty-bench groups:
 
 ```sh
 stack exec -- dhall +RTS -s --RTS --file benchmark/evaluation/import_overhead/projection/projection.dhall

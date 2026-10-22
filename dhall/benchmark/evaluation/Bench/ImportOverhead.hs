@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Import-resolution overhead fixtures.
 --
--- Generated trees (custom normalizer, import alternatives, starting context,
--- root substitutions) are built during prep. The projection / force-all pair
--- is the committed tree under @import_overhead/projection@, which the CLI
--- timings in that directory's README also use.
+-- Generated trees are built during prep. The projection / force-all pair is
+-- rewritten under @import_overhead/projection@ on every run, including when
+-- those files are already present. That directory is not checked in. The CLI
+-- timings in its README use the same path.
 module Bench.ImportOverhead
     ( benchmarks
     ) where
@@ -43,6 +43,9 @@ contextBinderCount = 100
 contextFileCount :: Int
 contextFileCount = 370
 
+projectionCount :: Int
+projectionCount = 200
+
 projectionDirectory :: FilePath
 projectionDirectory = "benchmark/evaluation/import_overhead/projection"
 
@@ -75,13 +78,8 @@ benchmarks mPattern k
             alt <- importAltBenches mPattern (root </> "import-alt")
             subst <- pure (rootSubstitutionBenches mPattern)
             context <- startingContextBenches mPattern (root </> "starting-context")
-            projection <- committedEndToEnd mPattern
-                "import_overhead.projection"
-                "projection.dhall"
-            forceAll <- committedEndToEnd mPattern
-                "import_overhead.force_all"
-                "force_all.dhall"
-            k (concat [custom, alt, subst, context, projection, forceAll])
+            projection <- projectionBenches mPattern
+            k (concat [custom, alt, subst, context, projection])
 
 customNormalizerBenches :: Maybe String -> FilePath -> IO [Benchmark]
 customNormalizerBenches mPattern dir
@@ -303,18 +301,67 @@ writeStartingContext root = do
                 ]
             <> "\n]\n"
 
-committedEndToEnd :: Maybe String -> String -> FilePath -> IO [Benchmark]
-committedEndToEnd mPattern group relative
-    | not (active mPattern (group <> "." <> endToEndColdBenchName)) =
+projectionBenches :: Maybe String -> IO [Benchmark]
+projectionBenches mPattern
+    | not (active mPattern projectionLabel || active mPattern forceAllLabel) =
         pure []
     | otherwise = do
-        (settings, parsed) <- loadMain projectionDirectory relative
-        pure
-            [ bgroup group
-                [ bench endToEndColdBenchName
-                    (nfAppIO (resolveTypecheckNormalizeCold settings) parsed)
+        timed "import_overhead.projection: generate" $
+            writeProjection projectionDirectory
+        projection <- endToEnd "import_overhead.projection" "projection.dhall"
+        forceAll <- endToEnd "import_overhead.force_all" "force_all.dhall"
+        pure (projection ++ forceAll)
+  where
+    projectionLabel = "import_overhead.projection." <> endToEndColdBenchName
+    forceAllLabel = "import_overhead.force_all." <> endToEndColdBenchName
+    endToEnd group relative
+        | not (active mPattern (group <> "." <> endToEndColdBenchName)) =
+            pure []
+        | otherwise = do
+            (settings, parsed) <- loadMain projectionDirectory relative
+            pure
+                [ bgroup group
+                    [ bench endToEndColdBenchName
+                        (nfAppIO (resolveTypecheckNormalizeCold settings) parsed)
+                    ]
                 ]
-            ]
+
+-- | Always rewrite the projection tree. A leftover from a previous count or
+-- field width would silently change the timed cost.
+writeProjection :: FilePath -> IO ()
+writeProjection root = do
+    Directory.createDirectoryIfMissing True root
+    mapM_ writeOne [0 .. projectionCount - 1]
+    Text.IO.writeFile (root </> "force_all.dhall") forceAllSource
+    Text.IO.writeFile (root </> "projection.dhall") projectionSource
+  where
+    writeOne i =
+        Text.IO.writeFile
+            (root </> ("r" <> Text.unpack (pad3 i) <> ".dhall"))
+            (recordBody i)
+
+    recordBody i =
+        "{ "
+            <> Text.intercalate "\n, "
+                [ "f" <> pad2 j <> " = " <> Text.pack (show (if j == 0 then i else j))
+                | j <- [0 .. 7]
+                ]
+            <> "\n}\n"
+
+    names = [ "r" <> pad3 i | i <- [0 .. projectionCount - 1] ]
+
+    forceAllSource =
+        "{ "
+            <> Text.intercalate "\n, " [ name <> " = ./" <> name <> ".dhall" | name <- names ]
+            <> "\n}\n"
+
+    projectionSource =
+        "let rs =\n      { "
+            <> Text.intercalate "\n      , " [ name <> " = ./" <> name <> ".dhall" | name <- names ]
+            <> "\n      }\n\nin  Natural/show rs.r000.f00\n"
+
+pad2 :: Int -> Text
+pad2 i = Text.pack (printf "%02d" i)
 
 loadMain :: FilePath -> FilePath -> IO (Dhall.InputSettings, ParsedExpr)
 loadMain directory relative = do
