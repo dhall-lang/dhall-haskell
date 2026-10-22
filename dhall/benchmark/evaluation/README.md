@@ -155,6 +155,7 @@ read `evaluation` (or cold `dhall hash`).
 | `large4` | `large4/` | A | Medium customization tree |
 | `large5/` | A | Smaller tree |
 | `large6.slow_*` | `large6/` | A, B, or C | Isolated ~0.5 s artificial burdens |
+| `import_overhead.*` | `import_overhead/` (some generated at prep) | D, E | Retained import data, custom normalizer, import alternatives, substitutions, starting context, projection vs force-all. See `import_overhead/README.md`. |
 | `diamond_import` | `diamond_import/` | D | One unhashed shared import at several import sites. |
 | `diamond_import_transitive` | `diamond_import_transitive/` | D | Same shared unhashed import, but reached through different files (similar to importing a prelude) instead of direct references in one file |
 | `prelude_import.*` | `prelude_import/` | B | Full Prelude package, Code vs Source |
@@ -204,6 +205,7 @@ why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
 - `large5/README.md` — small Code vs Source tree
 - `large6/README.md` — slow-child matrix and burden placement
 - `prelude_import/README.md` — Prelude cold import
+- `import_overhead/README.md` — import-resolution overhead fixtures
 - `diamond_import/README.md` — unhashed shared imports
 - `diamond_import_transitive/README.md` — unhashed shared imports reached transitively
 - [`.github/workflows/README.md`](../../../.github/workflows/README.md) — CI job, `gh-pages` charts, on-demand runs
