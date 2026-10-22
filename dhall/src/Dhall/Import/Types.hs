@@ -238,10 +238,11 @@ data Status = Status
     --   instead of holding the source text of every fetched file.
 
     , _keepImportBodies :: Bool
-    -- ^ 'False' when not going through 'normalizeLoaded',
-    --   for example when normalizing with a custom normalizer.
-    --   '_importBodies' then stays empty: it would hold a second copy of
-    --   every imported file's syntax.
+    -- ^ 'False' on a private path that neither returns 'Status' nor evaluates
+    --   the shared expression.  'Dhall.resolveSharedWithSettings' leaves this
+    --   'True', including when a custom normalizer is set, so
+    --   'normalizeLoaded' can still run.  '_importBodies' then stays empty
+    --   only for callers that would not read it.
 
     , _sharedEvaluation :: Bool
     -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.

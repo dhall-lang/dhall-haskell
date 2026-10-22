@@ -90,6 +90,11 @@ getTests = do
                 , collectImportErrorTests
                 , sharedImportEvaluationTests
                 , customNormalizerEvaluatesInlinedTree
+                , customNormalizerSharedTreeStillNormalizes
+                , sharedImportRefsHaveBodies
+                , defaultStatusRecordsSources
+                , omittingImportSourcesLeavesResolutionUnchanged
+                , invalidSubstitutionKeepsParseSource
                 ]
 
     return testTree
@@ -327,6 +332,132 @@ customNormalizerEvaluatesInlinedTree =
                             ]
                         )
             Core.denote result Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
+
+-- | 'resolveSharedWithSettings' keeps import bodies even when a custom
+--   normalizer is set, and 'normalizeLoaded' performs ordinary built-in
+--   normalization of that shared tree.
+customNormalizerSharedTreeStillNormalizes :: TestTree
+customNormalizerSharedTreeStillNormalizes =
+    Tasty.HUnit.testCase "custom normalizer leaves normalizeLoaded on the builtin path" $
+        Temp.withSystemTempDirectory "dhall-custom-normalizer-shared" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            (resolved, shared, status) <- resolveShared dir
+            let sharedNF = Core.denote (Import.normalizeLoaded status shared)
+                builtinNF = Core.denote (Core.normalize resolved)
+                expected =
+                    Core.RecordLit
+                        ( Map.fromList
+                            [ ("a", Core.makeRecordField (Core.NaturalLit 0))
+                            , ("b", Core.makeRecordField (Core.NaturalLit 0))
+                            ]
+                        )
+            (sharedNF :: Core.Expr Void Void) Tasty.HUnit.@?= builtinNF
+            sharedNF Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
+
+sharedImportRefsHaveBodies :: TestTree
+sharedImportRefsHaveBodies =
+    Tasty.HUnit.testCase "every shared ImportRef has a body" $
+        Temp.withSystemTempDirectory "dhall-shared-bodies" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            (_, shared, status) <- resolveShared dir
+            let refs = importRefs shared
+            Tasty.HUnit.assertBool "shared tree has an import" (not (null refs))
+            mapM_ (assertHasBody status) refs
+  where
+    assertHasBody status ref =
+        Tasty.HUnit.assertBool "missing import body" $
+            Map.member ref (Import._importBodies status)
+
+    importRefs (Core.Embed ref) = [ref]
+    importRefs expr = concatMap importRefs (Lens.toListOf Core.subExpressions expr)
+
+defaultStatusRecordsSources :: TestTree
+defaultStatusRecordsSources =
+    Tasty.HUnit.testCase "the default status records import sources" $
+        Temp.withSystemTempDirectory "dhall-import-sources" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            parsed <- sharedExpr
+            let settings = Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings
+            (_, status) <- Dhall.resolveAndStatusWithSettings settings parsed
+            Tasty.HUnit.assertBool "import sources are empty" $
+                not (null (Map.keys (Import._importSources status)))
+
+omittingImportSourcesLeavesResolutionUnchanged :: TestTree
+omittingImportSourcesLeavesResolutionUnchanged =
+    Tasty.HUnit.testCase "dropping import sources does not change resolution" $
+        Temp.withSystemTempDirectory "dhall-omit-sources" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            parsed <- sharedExpr
+            (kept, keptStatus) <- loadSources dir parsed True
+            (dropped, droppedStatus) <- loadSources dir parsed False
+            (Core.denote kept :: Core.Expr Void Void) Tasty.HUnit.@?= Core.denote dropped
+            Tasty.HUnit.assertBool "sources were not recorded" $
+                not (null (Map.keys (Import._importSources keptStatus)))
+            null (Map.keys (Import._importSources droppedStatus))
+                Tasty.HUnit.@?= True
+
+            missing <- Core.throws (Parser.exprFromText "(test)" "./missing.dhall\n")
+            keptError <- Exception.try @SomeException (evalMissing dir missing True)
+            droppedError <- Exception.try @SomeException (evalMissing dir missing False)
+            case (keptError, droppedError) of
+                (Left left, Left right) ->
+                    show left Tasty.HUnit.@?= show right
+                _ ->
+                    Tasty.HUnit.assertFailure "missing import should fail"
+  where
+    loadSources dir parsed keep = do
+        let status =
+                (Import.emptyStatus dir)
+                    { Import._keepImportSources = keep
+                    , Import._semanticCacheMode = Import.IgnoreSemanticCache
+                    }
+        State.runStateT (Import.loadWith parsed) status
+
+    evalMissing dir parsed keep =
+        State.evalStateT (Import.loadWith parsed) $
+            (Import.emptyStatus dir)
+                { Import._keepImportSources = keep
+                , Import._semanticCacheMode = Import.IgnoreSemanticCache
+                }
+
+invalidSubstitutionKeepsParseSource :: TestTree
+invalidSubstitutionKeepsParseSource =
+    Tasty.HUnit.testCase "an invalid substitution keeps its parse source" $
+        Temp.withSystemTempDirectory "dhall-substitution-source" $ \dir -> do
+            Text.IO.writeFile (dir </> "child.dhall") "Bad\n"
+            bad <- Import.assertNoImports =<<
+                Core.throws (Parser.exprFromText "(substitution)" "1 : Bool\n")
+            let settings =
+                    Lens.set
+                        Dhall.substitutions
+                        (Map.fromList [("Bad", bad)])
+                        (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+            result <- Exception.try @SomeException $
+                Dhall.inputExprWithSettings settings "./child.dhall\n"
+            case result of
+                Right _ ->
+                    Tasty.HUnit.assertFailure "expected a type error"
+                Left err ->
+                    Tasty.HUnit.assertBool (show err) $
+                        "(substitution)" `List.isInfixOf` show err
+
+resolveShared
+    :: FilePath
+    -> IO (Core.Expr Parser.Src Void, Core.Expr Parser.Src Import.ImportRef, Import.Status)
+resolveShared dir = do
+    parsed <- sharedExpr
+    let normalizer (Core.NaturalLit 0) = Just (Core.NaturalLit 7)
+        normalizer _ = Nothing
+        settings =
+            Lens.set
+                Dhall.normalizer
+                (Just (Core.ReifiedNormalizer (pure . normalizer)))
+                (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+    Dhall.resolveSharedWithSettings settings parsed
+
+sharedExpr :: IO (Core.Expr Parser.Src Core.Import)
+sharedExpr =
+    Core.throws (Parser.exprFromText "(test)" "{ a = ./shared.dhall, b = ./shared.dhall }\n")
 
 normalizePair
     :: FilePath

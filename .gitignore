@@ -28,6 +28,7 @@ stack*.yaml.lock
 docs
 result
 /dhall/benchmark/evaluation/large6/slow/parse.dhall
+/dhall/benchmark/evaluation/import_overhead/projection/
 result-*
 report.html
 /dhall/tests/to-directory-tree/*.out/

@@ -128,7 +128,8 @@ resolveTypecheckNormalize
     :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveTypecheckNormalize settings parsed = do
     (resolved, shared, status) <- Dhall.resolveSharedWithSettings settings parsed
-    _ <- either throw pure (TypeCheck.typeOf resolved)
+    _ <- either throw pure
+        (TypeCheck.typeWith (settings ^. Dhall.startingContext) resolved)
     pure (normalizeShared status shared resolved)
   where
     normalizeShared status shared resolved =

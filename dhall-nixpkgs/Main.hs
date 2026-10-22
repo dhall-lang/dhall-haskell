@@ -386,7 +386,7 @@ findExternalDependencies expression = do
 
             parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText filepath expressionText)
 
-            zoom stack (State.modify (NonEmpty.cons child))
+            zoom stack (State.modify' (NonEmpty.cons child))
 
             findExternalDependencies parsedExpression
 

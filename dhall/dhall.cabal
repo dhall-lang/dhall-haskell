@@ -541,6 +541,7 @@ Benchmark evaluation
     Main-Is: Main.hs
     Other-Modules:
         Bench.Common
+        Bench.ImportOverhead
         Bench.ImportTrees
         Bench.Semisemantic
         Bench.Substitutions
