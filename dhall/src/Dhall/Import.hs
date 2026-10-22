@@ -932,19 +932,38 @@ writeToSemanticCache report hash bytes = do
 --   'Dhall.Substitution.ResolvedSubstitutions' on 'Status'.
 applyStatusSubstitutions
     :: Expr Src a -> StateT Status IO (Expr Src a)
-applyStatusSubstitutions expression = do
+applyStatusSubstitutions =
+    applySubstitutions True
+
+-- | As 'applyStatusSubstitutions', but keep source spans on substitution
+--   values.  Used only to rebuild a type error.  Does not replace the
+--   denoted cache that successful checks use.
+applyAnnotatedSubstitutions
+    :: Expr Src a -> StateT Status IO (Expr Src a)
+applyAnnotatedSubstitutions =
+    applySubstitutions False
+
+applySubstitutions
+    :: Bool -> Expr Src a -> StateT Status IO (Expr Src a)
+applySubstitutions denote expression = do
     Status { _substitutions, _resolvedSubstitutions } <- State.get
 
     resolved <- case _resolvedSubstitutions of
-        Just cached ->
-            return cached
-        Nothing -> do
-            let cached =
-                    Dhall.Substitution.resolveSubstitutions
-                        (fmap Core.denote _substitutions)
+        Just cached
+            | denote ->
+                return cached
+        _ -> do
+            let raw
+                    | denote =
+                        fmap Core.denote _substitutions
+                    | otherwise =
+                        _substitutions
+                cached =
+                    Dhall.Substitution.resolveSubstitutions raw
 
-            State.modify'
-                (\s -> s { _resolvedSubstitutions = Just cached })
+            when denote $
+                State.modify'
+                    (\s -> s { _resolvedSubstitutions = Just cached })
 
             return cached
 
@@ -982,7 +1001,16 @@ typecheckWithAlreadyCheckedImports starting parsed = do
                 (expr, (ctx, _)) <-
                     State.runStateT (bindImports parent parsed) (base, 0 :: Int)
                 substituted <- applyStatusSubstitutions expr
-                return (Just (Dhall.TypeCheck.typeWithContext ctx substituted))
+                let checked = Dhall.TypeCheck.typeWithContext ctx substituted
+                case checked of
+                    Right inferred ->
+                        return (Just (Right inferred))
+                    Left _ -> do
+                        -- The denoted map drops the substitution's own source
+                        -- span.  Rebuild this failure with the annotated map
+                        -- so the reported error still names that span.
+                        annotated <- applyAnnotatedSubstitutions expr
+                        return (Just (Dhall.TypeCheck.typeWithContext ctx annotated))
 
 startingTypingContext
     :: Dhall.Context.Context (Expr Src Void)
@@ -1176,7 +1204,18 @@ loadImportWithSemisemanticCache
                             typ <- case checked of
                                 Just result -> return result
                                 Nothing ->
-                                    return (Dhall.TypeCheck.typeWith _startingContext substitutedExpr)
+                                    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+                                        Right inferred ->
+                                            return (Right inferred)
+                                        Left _ -> do
+                                            annotated <-
+                                                applyAnnotatedSubstitutions
+                                                    (unsafeCoerce resolvedExpr :: Expr Src Void)
+                                            return
+                                                (Dhall.TypeCheck.typeWith
+                                                    _startingContext
+                                                    annotated
+                                                )
                             case typ of
                                 Left  err -> throwMissingImport (Imported _stack err)
                                 Right inferred -> do

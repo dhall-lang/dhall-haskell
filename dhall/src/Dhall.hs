@@ -268,8 +268,9 @@ expectWithSettings settings Decoder{..} expression = do
     'normalizeWithSettings' when a normal form is required.
 -}
 resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
-resolveWithSettings settings expression =
-    fst <$> resolveAndStatusWithSettings settings expression
+resolveWithSettings settings expression = do
+    (resolved, _, _) <- resolveKeeping settings False False expression
+    pure resolved
 
 -- | A version of 'resolveWithSettings' that also returns the import 'Status'
 -- together with the resolved expression.
@@ -295,18 +296,30 @@ resolveSharedWithSettings
     :: InputSettings
     -> Expr Src Import
     -> IO (Expr Src Void, Expr Src ImportRef, Status)
-resolveSharedWithSettings settings expression = do
+resolveSharedWithSettings settings expression =
+    resolveKeeping settings True True expression
+
+-- | Resolve like 'resolveSharedWithSettings', optionally dropping data that
+--   the caller does not return.
+--
+--   Bodies stay when the caller evaluates the shared expression through
+--   'Dhall.Import.normalizeLoaded', and whenever the 'Status' is returned.
+--   Sources stay for every status-returning API.  Callers that return neither
+--   'Status' nor a shared expression may drop both.  The import graph is
+--   always recorded; omitting it is a separate change.
+resolveKeeping
+    :: InputSettings
+    -> Bool
+    -> Bool
+    -> Expr Src Import
+    -> IO (Expr Src Void, Expr Src ImportRef, Status)
+resolveKeeping settings retainBodies retainSources expression = do
     let InputSettings{..} = settings
 
-    -- With a custom normalizer, 'normalizeResolved' normalizes the inlined
-    -- tree, so the shared bodies would only be a second copy of every import.
-    let keepBodies = isNothing (view normalizer settings)
-
-    -- Only the LSP reads the fetched sources, and it builds its own 'Status'.
     let status =
             (emptyStatusWithSettings _evaluateSettings _rootDirectory)
-                { Dhall.Import._keepImportBodies = keepBodies
-                , Dhall.Import._keepImportSources = False
+                { Dhall.Import._keepImportBodies = retainBodies
+                , Dhall.Import._keepImportSources = retainSources
                 }
 
     let expression' =
@@ -332,7 +345,7 @@ resolveAndTypecheckWithSettings
     -> Expr Src Import
     -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
 resolveAndTypecheckWithSettings settings expression = do
-    (resolved, _, status) <- resolveSharedWithSettings settings expression
+    (resolved, _, status) <- resolveKeeping settings False False expression
 
     checked <-
         State.evalStateT
@@ -347,6 +360,12 @@ resolveAndTypecheckWithSettings settings expression = do
             Nothing     -> Dhall.TypeCheck.typeWith (view startingContext settings) resolved
 
     pure (resolved, typed)
+
+-- | A custom normalizer evaluates the inlined tree, so the shared bodies are
+--   unused.  Every other caller of 'normalizeResolved' needs them.
+retainSharedBodies :: InputSettings -> Bool
+retainSharedBodies settings =
+    isNothing (view normalizer settings)
 
 -- | Normalize after resolution.  A custom normalizer sees the inlined tree.
 --   Otherwise each import is evaluated once through the shared twin.
@@ -423,7 +442,7 @@ inputWithSettings
 inputWithSettings settings decoder@Decoder{..} text = do
     parsed <- parseWithSettings settings text
 
-    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
     expectWithSettings settings decoder resolved
 
@@ -500,7 +519,7 @@ inputExprWithSettings
 inputExprWithSettings settings text = do
     parsed <- parseWithSettings settings text
 
-    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
     _ <- typecheckWithSettings settings resolved
 
@@ -517,7 +536,7 @@ interpretExpr = interpretExprWithSettings defaultInputSettings
 interpretExprWithSettings
     :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
 interpretExprWithSettings settings parsed = do
-    (resolved, shared, status) <- resolveSharedWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
     typecheckWithSettings settings resolved
 
@@ -533,7 +552,7 @@ fromExpr = fromExprWithSettings defaultInputSettings
 -- | Like `fromExpr`, but customizable using `InputSettings`
 fromExprWithSettings :: InputSettings -> Decoder a -> Expr Src Import -> IO a
 fromExprWithSettings settings decoder@Decoder{..} expression = do
-    (resolved, shared, status) <- resolveSharedWithSettings settings expression
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False expression
 
     expectWithSettings settings decoder resolved
 
