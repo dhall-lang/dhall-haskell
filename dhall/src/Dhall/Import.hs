@@ -1353,7 +1353,7 @@ loadImportWithSemisemanticCache
     let edgeHash =
             Dhall.Crypto.sha256Hash (encodeExpression (importSemantics semantics))
 
-    zoom merkleHashCache (State.modify (Dhall.Map.insert import_ edgeHash))
+    zoom merkleHashCache (State.modify' (Dhall.Map.insert import_ edgeHash))
 
     return (LoadOk semantics)
 
@@ -1891,7 +1891,7 @@ loadSourceChildSemanticsWithoutTypecheck sourceChild = do
         Nothing -> do
             sourceArtifact <- loadSourceImportArtifact sourceChild
             importSemantics <- finalizeSourceImportWithoutTypecheck sourceArtifact
-            zoom cache (State.modify (Dhall.Map.insert sourceChild importSemantics))
+            zoom cache (State.modify' (Dhall.Map.insert sourceChild importSemantics))
             return importSemantics
 
 -- | Warm the in-memory import cache for a hashed child during the preserve
@@ -2043,7 +2043,7 @@ parseImportedExpression importType = do
                     throwMissingImport (Imported _stack (ParseError errInfo text))
                 Right expr -> do
                     zoom parsedImportCache
-                        (State.modify (Dhall.Map.insert cacheKey expr))
+                        (State.modify' (Dhall.Map.insert cacheKey expr))
                     return expr
 
 -- | Fetch the text contents of a URL
