@@ -1817,13 +1817,74 @@ loadSourceImportArtifact import_@(Chained (Import (ImportHashed _ importType) _)
 
     return (Core.denote resolvedExpr)
 
--- | Expand a source artifact to an import-free expression (no typecheck).
-expandSourceArtifact
+-- | Expand a preserved source artifact without inserting source spans.
+--
+--   'loadSourceImportArtifact' has already resolved @ImportAlt@ and inlined
+--   unhashed imports, so the common case only replaces the remaining embeds
+--   with cached child semantics.  Doing that on the denoted tree avoids a
+--   'Core.renote'/'Core.denote' round trip and a separate 'assertNoImports'
+--   walk.  An @ImportAlt@ that is still present uses the span-preserving
+--   resolver so fallback errors keep their old spans.
+expandPreservedArtifact
     :: Expr Void Import
-    -> StateT Status IO (Expr Src Void)
-expandSourceArtifact sourceArtifact = do
-    expandedExpr <- loadWithSource InlineHashedImports (Core.renote sourceArtifact)
-    assertNoImports expandedExpr
+    -> StateT Status IO (Expr Void Void)
+expandPreservedArtifact (ImportAlt left right) = do
+    expanded <-
+        loadWithSource InlineHashedImports (Core.renote (ImportAlt left right))
+    spanned <- assertNoImports expanded
+    return (Core.denote spanned)
+expandPreservedArtifact (Embed import₀) =
+    expandPreservedImport import₀
+expandPreservedArtifact expression =
+    Syntax.subExpressionsWith
+        expandPreservedImport
+        expandPreservedArtifact
+        expression
+
+expandPreservedImport :: Import -> StateT Status IO (Expr Void Void)
+expandPreservedImport import₀ = do
+    Status {..} <- State.get
+
+    let parent = NonEmpty.head _stack
+
+    child <- chainImport parent import₀
+
+    let local (Chained (Import (ImportHashed _ (Remote  {})) _)) = False
+        local (Chained (Import (ImportHashed _ (Local   {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Env     {})) _)) = True
+        local (Chained (Import (ImportHashed _ (Missing {})) _)) = False
+
+    let referentiallySane = not (local child) || local parent
+
+    if importMode import₀ == Location || referentiallySane
+        then return ()
+        else throwMissingImport (Imported _stack (ReferentiallyOpaque import₀))
+
+    if child `elem` _stack
+        then throwMissingImport (Imported _stack (Cycle import₀))
+        else return ()
+
+    zoom graph . State.modify $
+        \edges -> Depends parent child : edges
+
+    let stackWithChild = NonEmpty.cons child _stack
+
+    zoom stack (State.put stackWithChild)
+    ImportSemantics { importSemantics } <- loadSourceChild child
+    zoom stack (State.put _stack)
+    return importSemantics
+
+-- | Apply 'Status' substitutions to an already-denoted expression.
+--
+--   An empty map is the usual case and would otherwise rebuild the tree.
+substituteDenoted
+    :: Expr Void Void
+    -> StateT Status IO (Expr Void Void)
+substituteDenoted expression = do
+    Status { _substitutions } <- State.get
+    if Dhall.Map.size _substitutions == 0
+        then return expression
+        else fmap Core.denote (applyStatusSubstitutions (Core.renote expression))
 
 finalizeSourceImport
     :: Expr Void Import
@@ -1831,20 +1892,16 @@ finalizeSourceImport
 finalizeSourceImport sourceArtifact = do
     -- Expand preserved hashed imports and produce import-free semantics for
     -- typechecking and semantic-cache storage.
-    importFreeExpr <- expandSourceArtifact sourceArtifact
+    substitutedExpr <- expandPreservedArtifact sourceArtifact >>= substituteDenoted
     Status {..} <- State.get
 
-    substitutedExpr <- applyStatusSubstitutions importFreeExpr
-
-    case Dhall.TypeCheck.typeWith _startingContext substitutedExpr of
+    case Dhall.TypeCheck.typeWith _startingContext (Core.renote substitutedExpr) of
         Left  err -> throwMissingImport (Imported _stack err)
         Right _   -> return ()
 
-    let importSemantics = Core.denote substitutedExpr
-
     return
         ( ImportSemantics
-            { importSemantics
+            { importSemantics = substitutedExpr
             , importNormalizationStatus = TypecheckedOnly
             }
         )
@@ -1858,11 +1915,7 @@ finalizeSourceImportWithoutTypecheck
     :: Expr Void Import
     -> StateT Status IO ImportSemantics
 finalizeSourceImportWithoutTypecheck sourceArtifact = do
-    importFreeExpr <- expandSourceArtifact sourceArtifact
-
-    substitutedExpr <- applyStatusSubstitutions importFreeExpr
-
-    let importSemantics = Core.denote substitutedExpr
+    importSemantics <- expandPreservedArtifact sourceArtifact >>= substituteDenoted
 
     return
         ( ImportSemantics
