@@ -1345,8 +1345,25 @@ loadImportWithSemisemanticCache
 loadImportWithSemisemanticCache
   import_@(Chained (Import _ Source)) = do
     sourceArtifact <- loadSourceImportArtifact import_
+    Status { _reportWarning } <- State.get
+    typecheckKey <- computeSourceTypecheckKey import_ sourceArtifact
 
-    semantics <- finalizeSourceImport sourceArtifact
+    mCached <-
+        zoom cacheWarning
+            (fetchFromSemisemanticCache _reportWarning typecheckKey)
+
+    semantics <- case mCached of
+        Just SemisemanticSourceWellTyped ->
+            finalizeSourceImportWithoutTypecheck sourceArtifact
+        _ -> do
+            semantics <- finalizeSourceImport sourceArtifact
+            zoom cacheWarning
+                (writeToSemisemanticCache
+                    _reportWarning
+                    typecheckKey
+                    SemisemanticSourceWellTyped
+                )
+            return semantics
 
     -- Edge hash for parents that import this as Source: hash of the
     -- finalized import-free expression (not beta-normalized).
@@ -1609,6 +1626,7 @@ exceedsNFSizeThreshold expression =
 data SemisemanticPayload
     = SemisemanticCachedNF Data.ByteString.ByteString
     | SemisemanticWellTyped
+    | SemisemanticSourceWellTyped
 
 semisemanticNFTag :: Data.ByteString.ByteString
 semisemanticNFTag = Data.ByteString.singleton 0
@@ -1616,11 +1634,16 @@ semisemanticNFTag = Data.ByteString.singleton 0
 semisemanticTypedTag :: Data.ByteString.ByteString
 semisemanticTypedTag = Data.ByteString.singleton 1
 
+semisemanticSourceTypedTag :: Data.ByteString.ByteString
+semisemanticSourceTypedTag = Data.ByteString.singleton 2
+
 encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
 encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
     semisemanticNFTag <> bytes
 encodeSemisemanticPayload SemisemanticWellTyped =
     semisemanticTypedTag
+encodeSemisemanticPayload SemisemanticSourceWellTyped =
+    semisemanticSourceTypedTag
 
 decodeSemisemanticPayload
     :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
@@ -1631,6 +1654,9 @@ decodeSemisemanticPayload bytes =
         Just (1, rest)
             | Data.ByteString.null rest ->
                 Just SemisemanticWellTyped
+        Just (2, rest)
+            | Data.ByteString.null rest ->
+                Just SemisemanticSourceWellTyped
         _ ->
             Nothing
 
@@ -1724,6 +1750,29 @@ computeMerkleSemisemanticHash parent parsedImport = do
             ( Dhall.Crypto.unSHA256Digest skeletonHash
            <> Dhall.Crypto.unSHA256Digest contextHash
            <> Dhall.Crypto.unSHA256Digest substitutionsHash
+            )
+        )
+
+-- | Disk-cache key for "this @as Source@ artifact typechecked".
+--
+--   The key covers the preserve-pass artifact, with each remaining import
+--   replaced by its edge hash, plus the starting context and substitutions.
+--   It does not hash the fully expanded product. A trailing tag keeps the key
+--   distinct from a Code merkle key for a similar skeleton.
+computeSourceTypecheckKey
+    :: Chained
+    -> Expr Void Import
+    -> StateT Status IO Dhall.Crypto.SHA256Digest
+computeSourceTypecheckKey parent sourceArtifact = do
+    skeleton <- replaceEmbedsWithEdgeHashes parent sourceArtifact
+    let skeletonHash = hashExpression skeleton
+    (contextHash, substitutionsHash) <- memoizedMerkleFingerprints
+    return
+        ( Dhall.Crypto.sha256Hash
+            ( Dhall.Crypto.unSHA256Digest skeletonHash
+           <> Dhall.Crypto.unSHA256Digest contextHash
+           <> Dhall.Crypto.unSHA256Digest substitutionsHash
+           <> "source-typecheck"
             )
         )
 
