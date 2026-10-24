@@ -1127,10 +1127,66 @@ storeChildImportType imp = do
         Just typ ->
             zoom importTypes (State.modify' (Dhall.Map.insert here typ))
 
+-- | A tag-1 hit has no stored type.  Infer it from the children and, when
+--   that succeeds, replace the empty marker with the type.
+recomputeWellTypedHit
+    :: Dhall.Crypto.SHA256Digest
+    -> Expr Src Import
+    -> Expr Src ImportHole
+    -> Expr Src ImportRef
+    -> StateT Status IO LoadResult
+recomputeWellTypedHit semisemanticHash parsedImport resolvedExpr twinExpr = do
+    case Core.shallowDenote parsedImport of
+        Embed imp ->
+            storeChildImportType imp
+        _ ->
+            storeCompositionalImportType parsedImport
+    writeCurrentImportType semisemanticHash
+    finishTypecheckedImport resolvedExpr twinExpr
+
+finishTypecheckedImport
+    :: Expr Src ImportHole
+    -> Expr Src ImportRef
+    -> StateT Status IO LoadResult
+finishTypecheckedImport resolvedExpr twinExpr = do
+    substitutedExpr <-
+        applyStatusSubstitutions (unsafeCoerce resolvedExpr :: Expr Src Void)
+    Status { _stack } <- State.get
+    rememberSharedTwin (NonEmpty.head _stack) twinExpr
+    return
+        ( LoadOk ImportSemantics
+            { importSemantics = Core.denote substitutedExpr
+            , importNormalizationStatus = TypecheckedOnly
+            }
+        )
+
+-- | Write this file's type when we have one.  Otherwise record that it
+--   type-checks, which is all an older cache entry stored.
+writeCurrentImportType :: Dhall.Crypto.SHA256Digest -> StateT Status IO ()
+writeCurrentImportType semisemanticHash = do
+    Status { _stack, _importTypes, _reportWarning } <- State.get
+    let payload =
+            case Dhall.Map.lookup (NonEmpty.head _stack) _importTypes of
+                Just typ ->
+                    SemisemanticCachedType
+                        (encodeExpression (Core.denote typ :: Expr Void Void))
+                Nothing ->
+                    SemisemanticWellTyped
+    zoom cacheWarning
+        (writeToSemisemanticCache _reportWarning semisemanticHash payload)
+
+decodeCachedType :: Data.ByteString.ByteString -> Maybe (Expr Src Void)
+decodeCachedType bytesStrict =
+    case Dhall.Binary.decodeExpression (Data.ByteString.Lazy.fromStrict bytesStrict) of
+        Left _ ->
+            Nothing
+        Right expr ->
+            Just (Core.renote expr)
+
 -- | Type-check this file from the types of its children and store the result.
 --
---   Used for a semisemantic hit, whose cache entry does not include the type.
---   A failure leaves the map unchanged; the file is already known to type-check.
+--   A failure leaves the map unchanged.  On a cache hit the file is already
+--   known to type-check.
 storeCompositionalImportType :: Expr Src Import -> StateT Status IO ()
 storeCompositionalImportType parsedImport = do
     Status { _startingContext, _stack } <- State.get
@@ -1258,44 +1314,39 @@ loadImportWithSemisemanticCache
                                 }
                             )
 
-                Just SemisemanticWellTyped -> do
-                    substitutedExpr <-
-                        applyStatusSubstitutions
-                            (unsafeCoerce resolvedExpr :: Expr Src Void)
-                    rememberSharedTwin import_ twinExpr
-                    -- A tag-1 hit says this file typechecks.  It does not
-                    -- carry the type, so record it now.  Children are already
-                    -- loaded, and a single import copies the child's type
-                    -- instead of type-checking the inlined child.
-                    case Core.shallowDenote parsedImport of
-                        Embed imp ->
-                            storeChildImportType imp
-                        _ ->
-                            storeCompositionalImportType parsedImport
+                Just (SemisemanticCachedType bytesStrict) -> do
+                    case decodeCachedType bytesStrict of
+                        Nothing ->
+                            recomputeWellTypedHit
+                                semisemanticHash
+                                parsedImport
+                                resolvedExpr
+                                twinExpr
+                        Just typ -> do
+                            Status { _stack = stackHere } <- State.get
+                            zoom importTypes
+                                (State.modify'
+                                    (Dhall.Map.insert (NonEmpty.head stackHere) typ))
+                            finishTypecheckedImport resolvedExpr twinExpr
 
-                    return
-                        ( LoadOk ImportSemantics
-                            { importSemantics = Core.denote substitutedExpr
-                            , importNormalizationStatus = TypecheckedOnly
-                            }
-                        )
+                Just SemisemanticWellTyped ->
+                    recomputeWellTypedHit
+                        semisemanticHash
+                        parsedImport
+                        resolvedExpr
+                        twinExpr
 
                 -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
                 _ -> do
                     substitutedExpr <-
                         applyStatusSubstitutions
                             (unsafeCoerce resolvedExpr :: Expr Src Void)
-                    rememberSharedTwin import_ twinExpr
 
                     case Core.shallowDenote parsedImport of
                         Embed imp -> do
                             storeChildImportType imp
-                            return
-                                ( LoadOk ImportSemantics
-                                    { importSemantics = Core.denote substitutedExpr
-                                    , importNormalizationStatus = TypecheckedOnly
-                                    }
-                                )
+                            writeCurrentImportType semisemanticHash
+                            finishTypecheckedImport resolvedExpr twinExpr
 
                         _ -> do
                             checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
@@ -1323,19 +1374,9 @@ loadImportWithSemisemanticCache
                                             (Dhall.Map.insert (NonEmpty.head stackHere) inferred))
                                     return ()
 
-                            zoom cacheWarning
-                                (writeToSemisemanticCache
-                                    _reportWarning
-                                    semisemanticHash
-                                    SemisemanticWellTyped
-                                )
+                            writeCurrentImportType semisemanticHash
 
-                            return
-                                ( LoadOk ImportSemantics
-                                    { importSemantics = Core.denote substitutedExpr
-                                    , importNormalizationStatus = TypecheckedOnly
-                                    }
-                                )
+                            finishTypecheckedImport resolvedExpr twinExpr
 
             return importSemantics0
 
@@ -1469,6 +1510,9 @@ exceedsNFSizeThreshold expression =
 data SemisemanticPayload
     = SemisemanticCachedNF Data.ByteString.ByteString
     | SemisemanticWellTyped
+    -- ^ Tag 1.  The file type-checks, and the type is not in the entry.
+    | SemisemanticCachedType Data.ByteString.ByteString
+    -- ^ Tag 3.  CBOR of the denoted inferred type.  Tag 1 entries still decode.
 
 semisemanticNFTag :: Data.ByteString.ByteString
 semisemanticNFTag = Data.ByteString.singleton 0
@@ -1476,11 +1520,16 @@ semisemanticNFTag = Data.ByteString.singleton 0
 semisemanticTypedTag :: Data.ByteString.ByteString
 semisemanticTypedTag = Data.ByteString.singleton 1
 
+semisemanticTypeTag :: Data.ByteString.ByteString
+semisemanticTypeTag = Data.ByteString.singleton 3
+
 encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
 encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
     semisemanticNFTag <> bytes
 encodeSemisemanticPayload SemisemanticWellTyped =
     semisemanticTypedTag
+encodeSemisemanticPayload (SemisemanticCachedType bytes) =
+    semisemanticTypeTag <> bytes
 
 decodeSemisemanticPayload
     :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
@@ -1491,6 +1540,9 @@ decodeSemisemanticPayload bytes =
         Just (1, rest)
             | Data.ByteString.null rest ->
                 Just SemisemanticWellTyped
+        Just (3, rest)
+            | not (Data.ByteString.null rest) ->
+                Just (SemisemanticCachedType rest)
         _ ->
             Nothing
 
