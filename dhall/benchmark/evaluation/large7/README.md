@@ -1,12 +1,20 @@
 # large7 — duplicated unhashed imports
 
-`small.dhall` imports `Name/words.dhall`. That file and its dependencies import
-the same Prelude and LatinChar modules from many sites. Resolving those imports
-inlines a copy at every site, so the import graph (62 files) becomes a tree a
-few thousand times larger.
+Both entries import the same Prelude and LatinChar modules from many sites.
+Resolving those imports inlines a copy at every site, so the import graph
+becomes a tree a few thousand times larger.
 
-Prelude files under `dhall-lang/Prelude/` are symlinks to the `dhall-lang`
-submodule. `prelude.dhall` is a small record of the functions this tree uses.
+- `big.dhall` imports `Name/package.dhall`. This is the whole Name package
+  (70 files) and the entry `run.sh` and the tasty harness time.
+- `small.dhall` imports `Name/words.dhall` only. It is the same graph with the
+  `order`, `equality`, `fromLatinCharsAndNumber`, and `toTextIn*` files left
+  out. On an optimized build it is about a third of the `big.dhall` time.
+  `run.sh` has those three commands commented out. The tasty harness reads
+  `large7MainPath` in `Bench/ImportTrees.hs`.
+
+Prelude files under `dhall-lang/Prelude/` are unhashed copies. The upstream
+`dhall-lang` files still carry `sha256:` checks, and those checks collapse
+this tree. `prelude.dhall` is a small record of the functions this tree uses.
 The lude and typeclasses files are real copies, with integrity checks removed.
 
 `dhall type` and `dhall hash` typecheck or normalize that inlined tree. The
@@ -22,9 +30,9 @@ DHALL="$(stack exec -- which dhall)" ./benchmark/evaluation/large7/run.sh
 
 `run.sh` times three commands, and kills each one after 180s:
 
-- `dhall type --quiet --file small.dhall`
-- `dhall --file small.dhall`
-- `dhall hash --file small.dhall`
+- `dhall type --quiet --file big.dhall`
+- `dhall --file big.dhall`
+- `dhall hash --file big.dhall`
 
 ## Harness
 

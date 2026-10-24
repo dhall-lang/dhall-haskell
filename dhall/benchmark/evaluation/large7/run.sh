@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Time typecheck, default evaluation, and hash of small.dhall.
+# Time typecheck, default evaluation, and hash of big.dhall.
 # Each command is killed after 180s. Runnable from any directory.
 set -euo pipefail
 
@@ -33,9 +33,18 @@ PY
     echo
 }
 
-run_limited "dhall type --quiet --file small.dhall" \
-    "${DHALL}" type --quiet --file small.dhall
-run_limited "dhall --file small.dhall" \
-    "${DHALL}" --file small.dhall
-run_limited "dhall hash --file small.dhall" \
-    "${DHALL}" hash --file small.dhall
+run_limited "dhall type --quiet --file big.dhall" \
+    "${DHALL}" type --quiet --file big.dhall
+run_limited "dhall --file big.dhall" \
+    "${DHALL}" --file big.dhall
+run_limited "dhall hash --file big.dhall" \
+    "${DHALL}" hash --file big.dhall
+
+# small.dhall is Name/words.dhall, a subset of the package above. To time that
+# entry instead, comment out the three big.dhall commands and uncomment these:
+# run_limited "dhall type --quiet --file small.dhall" \
+#     "${DHALL}" type --quiet --file small.dhall
+# run_limited "dhall --file small.dhall" \
+#     "${DHALL}" --file small.dhall
+# run_limited "dhall hash --file small.dhall" \
+#     "${DHALL}" hash --file small.dhall

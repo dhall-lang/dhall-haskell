@@ -59,7 +59,7 @@ large7Directory :: FilePath
 large7Directory = "benchmark/evaluation/large7"
 
 large7MainPath :: FilePath
-large7MainPath = large7Directory </> "small.dhall"
+large7MainPath = large7Directory </> "big.dhall"
 
 large7Labels :: [String]
 large7Labels =
