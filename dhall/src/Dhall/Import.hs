@@ -2687,20 +2687,42 @@ lookupCachedImportSemantics status@Status { _stack, _cache } import_ = do
 
 -- | Produce the αβ-normal form required for 'hashExpression'.
 --
---   Uses 'importNormalizationStatus' to skip redundant normalization when the
---   import loader already beta-normalized the semantics.
+--   An already-normalized import is only α-normalized.  Otherwise a custom
+--   normalizer sees the inlined semantics.  The builtin normalizer evaluates
+--   the shared twin, so each imported file is normalized once.  A load that
+--   did not build the twin normalizes the inlined semantics.
 alphaBetaNormalForIntegrityHash
-    :: Maybe (Core.ReifiedNormalizer Void)
+    :: Status
+    -> Maybe (Core.ReifiedNormalizer Void)
+    -> Import
     -> ImportSemantics
     -> IO (Expr Void Void)
-alphaBetaNormalForIntegrityHash _ ImportSemantics
+alphaBetaNormalForIntegrityHash _ _ _ ImportSemantics
     { importSemantics
     , importNormalizationStatus = AlreadyNormalized
     } =
         pure (Core.alphaNormalize importSemantics)
-alphaBetaNormalForIntegrityHash customNormalizer ImportSemantics { importSemantics } =
+alphaBetaNormalForIntegrityHash status Nothing import_ ImportSemantics { importSemantics } = do
+    body <- lookupSharedBody status import_
+    case body of
+        Just twin ->
+            Exception.evaluate
+                (Core.alphaNormalize (normalizeLoaded status twin))
+        Nothing ->
+            Exception.evaluate
+                (Core.alphaNormalize (Core.normalize importSemantics))
+alphaBetaNormalForIntegrityHash _ customNormalizer _ ImportSemantics { importSemantics } =
     Exception.evaluate
         (Core.alphaNormalize (Core.normalizeWith customNormalizer importSemantics))
+
+-- | The twin body of an import loaded with 'loadWithShared'.
+lookupSharedBody :: Status -> Import -> IO (Maybe (Expr Src ImportRef))
+lookupSharedBody status@Status { _stack, _importRefs, _importBodies } import_ = do
+    let parent = NonEmpty.head _stack
+    chained <- State.evalStateT (chainImport parent import_) status
+    pure $ do
+        ref <- Dhall.Map.lookup chained _importRefs
+        Dhall.Map.lookup ref _importBodies
 
 -- | A call to `assertNoImports` failed because there was at least one import
 data ImportResolutionDisabled = ImportResolutionDisabled deriving (Exception)

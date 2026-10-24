@@ -1223,7 +1223,9 @@ command (Options {..}) = do
                         case maybeSemantics of
                             Just importSemantics ->
                                 Dhall.Import.alphaBetaNormalForIntegrityHash
+                                    status
                                     Nothing
+                                    import_
                                     importSemantics
                             Nothing -> do
                                 _ <-
@@ -1384,7 +1386,7 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, status) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
             _ <-
@@ -1396,7 +1398,8 @@ command (Options {..}) = do
                         )
                         status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
@@ -1425,7 +1428,7 @@ command (Options {..}) = do
         DirectoryTree {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, status) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
             _ <-
@@ -1434,7 +1437,8 @@ command (Options {..}) = do
                         (Dhall.Import.typecheckLoaded expression resolvedExpression)
                         status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 

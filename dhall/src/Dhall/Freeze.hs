@@ -220,7 +220,9 @@ freezeImportWithSettings settings directory import_ = do
         case maybeSemantics of
             Just importSemantics ->
                 Dhall.Import.alphaBetaNormalForIntegrityHash
+                    status'
                     customNormalizer
+                    unprotectedImport
                     importSemantics
             Nothing ->
                 integrityHashFallback customNormalizer expression
