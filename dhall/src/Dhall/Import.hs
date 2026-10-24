@@ -1102,6 +1102,37 @@ importsOf (Embed imp) = [imp]
 importsOf (Note _ e) = importsOf e
 importsOf e = concatMap importsOf (toListOf Syntax.subExpressions e)
 
+-- | Reuse the type of the one import this file contains.
+--
+--   Does not type-check the inlined child.  The child was loaded first, so
+--   its type is already in '_importTypes' when this file is a cache hit or a
+--   fresh single-import shortcut.
+storeChildImportType :: Import -> StateT Status IO ()
+storeChildImportType imp = do
+    Status { _stack, _importTypes } <- State.get
+    let here = NonEmpty.head _stack
+    child <- chainImport here imp
+    case Dhall.Map.lookup child _importTypes of
+        Nothing ->
+            return ()
+        Just typ ->
+            zoom importTypes (State.modify' (Dhall.Map.insert here typ))
+
+-- | Type-check this file from the types of its children and store the result.
+--
+--   Used for a semisemantic hit, whose cache entry does not include the type.
+--   A failure leaves the map unchanged; the file is already known to type-check.
+storeCompositionalImportType :: Expr Src Import -> StateT Status IO ()
+storeCompositionalImportType parsedImport = do
+    Status { _startingContext, _stack } <- State.get
+    checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
+    case checked of
+        Just (Right inferred) ->
+            zoom importTypes
+                (State.modify' (Dhall.Map.insert (NonEmpty.head _stack) inferred))
+        _ ->
+            return ()
+
 cachedImportType
     :: Chained
     -> ImportSemantics
@@ -1218,6 +1249,15 @@ loadImportWithSemisemanticCache
                         applyStatusSubstitutions
                             (unsafeCoerce resolvedExpr :: Expr Src Void)
                     rememberSharedTwin import_ twinExpr
+                    -- A tag-1 hit says this file typechecks.  It does not
+                    -- carry the type, so record it now.  Children are already
+                    -- loaded, and a single import copies the child's type
+                    -- instead of type-checking the inlined child.
+                    case Core.shallowDenote parsedImport of
+                        Embed imp ->
+                            storeChildImportType imp
+                        _ ->
+                            storeCompositionalImportType parsedImport
 
                     return
                         ( LoadOk ImportSemantics
@@ -1234,7 +1274,8 @@ loadImportWithSemisemanticCache
                     rememberSharedTwin import_ twinExpr
 
                     case Core.shallowDenote parsedImport of
-                        Embed _ ->
+                        Embed imp -> do
+                            storeChildImportType imp
                             return
                                 ( LoadOk ImportSemantics
                                     { importSemantics = Core.denote substitutedExpr
