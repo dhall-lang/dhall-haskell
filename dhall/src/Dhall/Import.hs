@@ -195,6 +195,7 @@ import Control.Exception
     , toException
     )
 import Control.Monad              (foldM, when)
+import Control.Monad.Trans.Class  (lift)
 import Control.Monad.Catch        (MonadCatch (catch), finally, handle, throwM)
 import Control.Monad.IO.Class     (MonadIO (..))
 import Control.Monad.State.Strict (MonadState, StateT)
@@ -1142,23 +1143,57 @@ recomputeWellTypedHit semisemanticHash parsedImport resolvedExpr twinExpr = do
         _ ->
             storeCompositionalImportType parsedImport
     writeCurrentImportType semisemanticHash
-    finishTypecheckedImport resolvedExpr twinExpr
+    finishTypecheckedImport parsedImport resolvedExpr twinExpr
 
+-- | Semantics of a type-checked file, sharing each child that is already
+--   denoted.  Denoting the inlined tree instead would copy those children.
 finishTypecheckedImport
-    :: Expr Src ImportHole
+    :: Expr Src Import
+    -> Expr Src ImportHole
     -> Expr Src ImportRef
     -> StateT Status IO LoadResult
-finishTypecheckedImport resolvedExpr twinExpr = do
-    substitutedExpr <-
-        applyStatusSubstitutions (unsafeCoerce resolvedExpr :: Expr Src Void)
+finishTypecheckedImport parsedImport resolvedExpr twinExpr = do
     Status { _stack } <- State.get
-    rememberSharedTwin (NonEmpty.head _stack) twinExpr
+    let here = NonEmpty.head _stack
+    substitutedParsed <- applyStatusSubstitutions parsedImport
+    grafted <-
+        Maybe.runMaybeT
+            (graftDenotedImports here (Core.denote substitutedParsed))
+    semantics <- case grafted of
+        Just expr ->
+            return expr
+        Nothing -> do
+            substitutedExpr <-
+                applyStatusSubstitutions
+                    (unsafeCoerce resolvedExpr :: Expr Src Void)
+            return (Core.denote substitutedExpr)
+    rememberSharedTwin here twinExpr
     return
         ( LoadOk ImportSemantics
-            { importSemantics = Core.denote substitutedExpr
+            { importSemantics = semantics
             , importNormalizationStatus = TypecheckedOnly
             }
         )
+
+-- | Replace each import with that import's denoted semantics.
+--
+--   Fails when a child was not loaded, so the caller can denote the inlined
+--   tree instead.
+graftDenotedImports
+    :: Chained
+    -> Expr s Import
+    -> Maybe.MaybeT (StateT Status IO) (Expr s Void)
+graftDenotedImports parent =
+    Syntax.subExpressionsWith replace (graftDenotedImports parent)
+  where
+    replace imp = do
+        child <- lift (chainImport parent imp)
+        Status { _cache } <- lift State.get
+        case Dhall.Map.lookup child _cache of
+            Nothing ->
+                empty
+            Just sem ->
+                return (Core.renote (importSemantics sem))
 
 -- | Write this file's type when we have one.  Otherwise record that it
 --   type-checks, which is all an older cache entry stored.
@@ -1327,7 +1362,7 @@ loadImportWithSemisemanticCache
                             zoom importTypes
                                 (State.modify'
                                     (Dhall.Map.insert (NonEmpty.head stackHere) typ))
-                            finishTypecheckedImport resolvedExpr twinExpr
+                            finishTypecheckedImport parsedImport resolvedExpr twinExpr
 
                 Just SemisemanticWellTyped ->
                     recomputeWellTypedHit
@@ -1346,7 +1381,7 @@ loadImportWithSemisemanticCache
                         Embed imp -> do
                             storeChildImportType imp
                             writeCurrentImportType semisemanticHash
-                            finishTypecheckedImport resolvedExpr twinExpr
+                            finishTypecheckedImport parsedImport resolvedExpr twinExpr
 
                         _ -> do
                             checked <- typecheckWithAlreadyCheckedImports _startingContext parsedImport
@@ -1376,7 +1411,7 @@ loadImportWithSemisemanticCache
 
                             writeCurrentImportType semisemanticHash
 
-                            finishTypecheckedImport resolvedExpr twinExpr
+                            finishTypecheckedImport parsedImport resolvedExpr twinExpr
 
             return importSemantics0
 
