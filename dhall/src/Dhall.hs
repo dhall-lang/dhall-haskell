@@ -347,17 +347,10 @@ resolveAndTypecheckWithSettings
 resolveAndTypecheckWithSettings settings expression = do
     (resolved, _, status) <- resolveKeeping settings False False expression
 
-    checked <-
+    typed <-
         State.evalStateT
-            (Dhall.Import.typecheckWithAlreadyCheckedImports
-                (view startingContext settings)
-                expression
-            )
+            (Dhall.Import.typecheckLoaded expression resolved)
             status
-
-    let typed = case checked of
-            Just result -> result
-            Nothing     -> Dhall.TypeCheck.typeWith (view startingContext settings) resolved
 
     pure (resolved, typed)
 

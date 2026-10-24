@@ -152,6 +152,8 @@ module Dhall.Import (
     , normalizer
     , startingContext
     , typecheckWithAlreadyCheckedImports
+    , typecheckLoaded
+    , loadRelativeToAndTypecheck
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -253,6 +255,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Functor.Const                          as FunctorConst
 import qualified Data.IntMap.Lazy                            as LazyIntMap
 import qualified Data.List.NonEmpty                          as NonEmpty
+import qualified Data.Map                                     as Map
 import qualified Data.Maybe                                  as Maybe
 import qualified Data.Text                                   as Text
 import qualified Data.Text.Encoding                          as Encoding
@@ -975,15 +978,19 @@ applySubstitutions denote expression = do
                 (unsafeCoerce expression :: Expr Src Void)
     return (unsafeCoerce substituted)
 
--- | Type-check a parsed import by binding each child import to the value and
---   type already stored for it.  Returns 'Nothing' when a child has not been
---   loaded yet (for example the unused side of @?@), so the caller can fall
---   back to type-checking the fully inlined expression.
+-- | Type-check a parsed import, leaving each child import as an 'Embed'.
+--
+--   The type of an 'Embed' is the type already stored for that import.  Its
+--   value is the import's semantics, forced only when a @let@ or a conversion
+--   needs it.  Returns 'Nothing' when a child has not been loaded yet (for
+--   example the unused side of @?@), or when this check fails.  The caller
+--   then type-checks the fully inlined expression, so a reported error points
+--   at that expression.
 --
 --   Haskell-API substitutions are applied to this file before the check.
 --   Those names live in 'Status', not in the starting context, so a parent
 --   such as @./child.dhall : UserType@ would otherwise report @UserType@
---   unbound.  Child bodies are already variables here and are not walked.
+--   unbound.
 typecheckWithAlreadyCheckedImports
     :: Dhall.Context.Context (Expr Src Void)
     -> Expr Src Import
@@ -997,20 +1004,82 @@ typecheckWithAlreadyCheckedImports starting parsed = do
         else case startingTypingContext starting of
             Left err ->
                 return (Just (Left err))
-            Right base -> do
-                (expr, (ctx, _)) <-
-                    State.runStateT (bindImports parent parsed) (base, 0 :: Int)
-                substituted <- applyStatusSubstitutions expr
-                let checked = Dhall.TypeCheck.typeWithContext ctx substituted
-                case checked of
-                    Right inferred ->
-                        return (Just (Right inferred))
-                    Left _ -> do
-                        -- The denoted map drops the substitution's own source
-                        -- span.  Rebuild this failure with the annotated map
-                        -- so the reported error still names that span.
-                        annotated <- applyAnnotatedSubstitutions expr
-                        return (Just (Dhall.TypeCheck.typeWithContext ctx annotated))
+            Right _ -> do
+                substituted <- applyStatusSubstitutions parsed
+                prepared <- importCheckEnvironment parent substituted
+                case prepared of
+                    Nothing ->
+                        return Nothing
+                    Just (types, semantics) ->
+                        case Dhall.TypeCheck.typeWithImports
+                                (embedTyper types)
+                                semantics
+                                (unsafeCoerce starting)
+                                substituted of
+                            Left _ ->
+                                return Nothing
+                            Right typ ->
+                                return (importFreeType typ)
+
+-- | 'typecheckWithAlreadyCheckedImports' for the root expression, falling
+--   back to 'Dhall.TypeCheck.typeWith' of the inlined tree.
+typecheckLoaded
+    :: Expr Src Import
+    -> Expr Src Void
+    -> StateT Status IO (Either (TypeError Src Void) (Expr Src Void))
+typecheckLoaded parsed inlined = do
+    Status { _startingContext } <- State.get
+    checked <- typecheckWithAlreadyCheckedImports _startingContext parsed
+    case checked of
+        Just (Right typ) ->
+            return (Right typ)
+        Just (Left err) ->
+            return (Left err)
+        Nothing ->
+            return (Dhall.TypeCheck.typeWith _startingContext inlined)
+
+importFreeType
+    :: Expr Src Import
+    -> Maybe (Either (TypeError Src Void) (Expr Src Void))
+importFreeType typ =
+    case traverse (const Nothing) typ of
+        Just typ' ->
+            Just (Right typ')
+        Nothing ->
+            Nothing
+
+-- | Types and import-free semantics for every 'Embed' in this file.
+importCheckEnvironment
+    :: Chained
+    -> Expr Src Import
+    -> StateT Status IO
+        (Maybe (Map.Map Import (Expr Src Void), Map.Map Import (Expr Void Import)))
+importCheckEnvironment parent expr = do
+    rows <- mapM (importRow parent) (importsOf expr)
+    case sequence rows of
+        Nothing ->
+            return Nothing
+        Just entries ->
+            return
+                ( Just
+                    ( Map.fromList [(imp, typ) | (imp, typ, _) <- entries]
+                    , Map.fromList [(imp, unsafeCoerce sem) | (imp, _, sem) <- entries]
+                    )
+                )
+  where
+    importRow parentImport imp = do
+        child <- chainImport parentImport imp
+        Status { _cache } <- State.get
+        case Dhall.Map.lookup child _cache of
+            Nothing ->
+                return Nothing
+            Just sem -> do
+                typ <- cachedImportType child sem
+                return (Just (imp, typ, importSemantics sem))
+
+embedTyper :: Map.Map Import (Expr Src Void) -> Dhall.TypeCheck.Typer Import
+embedTyper types imp =
+    unsafeCoerce (Map.findWithDefault (Const Syntax.Type) imp types)
 
 startingTypingContext
     :: Dhall.Context.Context (Expr Src Void)
@@ -1032,32 +1101,6 @@ importsOf :: Expr Src Import -> [Import]
 importsOf (Embed imp) = [imp]
 importsOf (Note _ e) = importsOf e
 importsOf e = concatMap importsOf (toListOf Syntax.subExpressions e)
-
-bindImports
-    :: Chained
-    -> Expr Src Import
-    -> StateT (Dhall.TypeCheck.TypingContext Src, Int) (StateT Status IO) (Expr Src Void)
-bindImports parent =
-    Syntax.subExpressionsWith onImport (bindImports parent)
-  where
-    onImport imp = do
-        (ctx, n) <- State.get
-        child <- State.lift (chainImport parent imp)
-        Status { _cache } <- State.lift State.get
-        case Dhall.Map.lookup child _cache of
-            Nothing ->
-                State.lift (liftIO (Exception.throwIO (MissingImports [])))
-            Just sem -> do
-                typ <- State.lift (cachedImportType child sem)
-                let name = Text.pack ("i`" ++ show n)
-                    ctx' =
-                        Dhall.TypeCheck.extendAlreadyChecked
-                            name
-                            (Core.denote typ)
-                            (importSemantics sem)
-                            ctx
-                State.put (ctx', n + 1)
-                return (Var (Syntax.V name 0))
 
 cachedImportType
     :: Chained
@@ -2454,6 +2497,26 @@ loadWithManager newManager =
 loadRelativeTo :: FilePath -> SemanticCacheMode -> Expr Src Import -> IO (Expr Src Void)
 loadRelativeTo parentDirectory = loadWithStatus
     (makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory)
+
+-- | 'loadRelativeTo', and the type of the result.
+--
+--   Uses 'typecheckLoaded', so a resolved import is not type-checked by
+--   walking its fully inlined tree unless that check cannot be reused.
+loadRelativeToAndTypecheck
+    :: FilePath
+    -> SemanticCacheMode
+    -> Expr Src Import
+    -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
+loadRelativeToAndTypecheck parentDirectory mode expression = do
+    let status =
+            makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory
+    (resolved, status') <-
+        State.runStateT
+            (loadWith expression)
+            status { _semanticCacheMode = mode }
+    inferred <-
+        State.evalStateT (typecheckLoaded expression resolved) status'
+    pure (resolved, inferred)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus
