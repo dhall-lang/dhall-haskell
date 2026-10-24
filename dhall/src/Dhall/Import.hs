@@ -445,6 +445,7 @@ substitutePlaceholder src inner es = do
             Just Import{ importMode = Location }  -> Just KnownLocation
             _                                     -> Nothing
     hole <- nextPlaceholder
+    noteEmbeddedHole
     State.modify' $ \s ->
         s { _collectedImportErrors =
                 CollectedImportError
@@ -464,6 +465,14 @@ nextPlaceholder = do
     Status { _placeholderCount } <- State.get
     State.modify' $ \s -> s { _placeholderCount = _placeholderCount + 1 }
     return (ImportHole _placeholderCount)
+
+-- | Count a hole placed into a resolved expression.
+--
+--   Callers compare the count around one file so they can see a hole without
+--   walking that file's inlined tree.
+noteEmbeddedHole :: StateT Status IO ()
+noteEmbeddedHole =
+    State.modify' (\s -> s { _embeddedHoleCount = _embeddedHoleCount s + 1 })
 
 -- | 'True' when the expression contains a hole from a failed import.
 --
@@ -1196,20 +1205,25 @@ loadImportWithSemisemanticCache
             throwMissingImport (Imported _stack (ParseError errInfo text))
         Right expr    -> return expr
 
-    Status { _collectedImportErrors = errorsBefore } <- State.get
-    (resolvedExpr, twinExpr, _) <- resolveImports parsedImport
-    Status { _importErrorMode, _insideImportAlt, _collectedImportErrors = errorsAfter } <-
+    Status { _collectedImportErrors = errorsBefore, _embeddedHoleCount = holesBefore } <-
         State.get
+    (resolvedExpr, twinExpr, _) <- resolveImports parsedImport
+    Status
+        { _importErrorMode
+        , _insideImportAlt
+        , _collectedImportErrors = errorsAfter
+        , _embeddedHoleCount = holesAfter
+        } <- State.get
     -- A nested file that recorded import errors, or that inlined a hole from
     -- an earlier import, is not type-checked or cached.  Those errors are
     -- already in the list, so this import becomes a hole instead of a second
     -- message.  Returning it here keeps the sources recorded for this import.
-    -- The hole check matters when the failed import was a cache hit: the
-    -- error list does not grow, but the value is still a hole.
+    -- The hole count matters when the failed import was a cache hit: the
+    -- error list does not grow, but resolving it still embeds the hole.
     if _importErrorMode == CollectErrors
         && not _insideImportAlt
         && (length errorsAfter /= length errorsBefore
-            || exprHasHole resolvedExpr)
+            || holesAfter /= holesBefore)
         then do
             hole <- nextPlaceholder
             return (LoadHole hole)
@@ -2124,7 +2138,8 @@ resolveImports expr₀ = case expr₀ of
     loaded <- loadImport child
     zoom stack (State.put _stack)
     case loaded of
-        LoadHole hole ->
+        LoadHole hole -> do
+            noteEmbeddedHole
             return (Embed hole, unusedTwin, True)
         LoadOk ImportSemantics { importSemantics } -> do
             let inlined = asInlined (Core.renote importSemantics)
@@ -2275,7 +2290,10 @@ In any expression `p ? q` the opportunistic caching rule says:
           `catch` \EnclosingImportFailed -> do
               Status { _importErrorMode, _insideImportAlt } <- State.get
               if _importErrorMode == CollectErrors && not _insideImportAlt
-                  then nextPlaceholder >>= both . Embed
+                  then do
+                      hole <- nextPlaceholder
+                      noteEmbeddedHole
+                      both (Embed hole)
                   else throwM EnclosingImportFailed
   Let binding body     -> do
       (bindingInlined, bindingShared, bindingCopied) <- pairBinding binding
