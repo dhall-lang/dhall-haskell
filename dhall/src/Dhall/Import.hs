@@ -111,6 +111,7 @@ module Dhall.Import (
     , loadWith
     , loadWithHoles
     , loadWithShared
+    , loadCollectingShared
     , normalizeLoaded
     , normalizeLoadedCapped
     , localToPath
@@ -2184,6 +2185,18 @@ loadWithShared
 loadWithShared expression = do
     State.modify' (\s -> s { _sharedEvaluation = True })
     fmap (\(inlined, shared, _) -> (unsafeCoerce inlined, shared)) (resolveImports expression)
+
+-- | 'loadWithShared' for 'CollectErrors'.
+--
+--   The inlined expression keeps 'ImportHole's.  'loadWithShared' coerces that
+--   tree to @'Expr' 'Src' 'Void'@, which is only valid when every import
+--   succeeded.
+loadCollectingShared
+    :: Expr Src Import
+    -> StateT Status IO (Expr Src ImportHole, Expr Src ImportRef)
+loadCollectingShared expression = do
+    State.modify' (\s -> s { _sharedEvaluation = True })
+    fmap (\(inlined, shared, _) -> (inlined, shared)) (resolveImports expression)
 
 -- | 'loadWithShared' sets '_sharedEvaluation' and then calls this.  Nested
 --   loads, including the semisemantic walk of each imported file, keep the

@@ -35,10 +35,11 @@ import Dhall.Parser (Src)
 import Control.Exception                (SomeException, catch, throwIO, toException, try)
 import Control.Lens                     (set, view)
 import Control.Monad.IO.Class           (liftIO)
-import Control.Monad.Trans.State.Strict (StateT, get, put, runStateT)
+import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put, runStateT)
 import Data.Bifunctor                   (first)
 import Data.IORef                       (IORef, modifyIORef', readIORef)
 import Data.List.NonEmpty               (NonEmpty ((:|)))
+import Data.Maybe                       (isJust)
 import Data.Text                        (Text)
 import Data.Time.Clock                  (UTCTime, diffUTCTime, getCurrentTime)
 import Data.Void                        (Void)
@@ -118,6 +119,10 @@ data Cache =
         { cacheGraph :: ImportGraph
         , cacheSemantics :: Dhall.Map.Map Import.Chained Import.ImportSemantics
         , cacheImportTypes :: Dhall.Map.Map Import.Chained (Expr Src Void)
+        , cacheEval :: Maybe (Import.Status, Expr Src Import.ImportRef)
+        -- ^ Shared twin from the last load that did not use a custom
+        --   normalizer.  'normalize' evaluates this instead of the inlined
+        --   tree.  Invalidated imports clear it.
         }
 
 cachedSemantics :: Cache -> Dhall.Map.Map Import.Chained Import.ImportSemantics
@@ -128,7 +133,7 @@ cachedImportTypes Cache { cacheImportTypes = types } = types
 
 -- | The initial cache.
 emptyCache :: Cache
-emptyCache = Cache [] Dhall.Map.empty Dhall.Map.empty
+emptyCache = Cache [] Dhall.Map.empty Dhall.Map.empty Nothing
 
 -- | Invalidate any _unhashed_ imports of the given file. Hashed imports are
 --   kept around as per
@@ -140,6 +145,7 @@ invalidate (FileIdentifier chained) cache@Cache { cacheGraph = dependencies, cac
       { cacheGraph = dependencies'
       , cacheSemantics = Dhall.Map.withoutKeys sem invalidImports
       , cacheImportTypes = Dhall.Map.withoutKeys types invalidImports
+      , cacheEval = Nothing
       }
   where
     imports = map Import.parent dependencies ++ map Import.child dependencies
@@ -206,12 +212,22 @@ load settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, ca
                -- set "root import"
                set Import.stack (chained :| [])
                  $ emptyStatus
-  (do (expr', status') <- runStateT (Import.loadWith expr) status
+  let customNormalizer = isJust (view Dhall.normalizer settings)
+  (do ((expr', twin), status') <- runStateT
+          (if customNormalizer
+              then do
+                  loaded <- Import.loadWith expr
+                  return (loaded, Nothing)
+              else do
+                  (loaded, shared) <- Import.loadWithShared expr
+                  return (loaded, Just shared))
+          status
       let cache' =
               Cache
                   { cacheGraph = view Import.graph status'
                   , cacheSemantics = view Import.cache status'
                   , cacheImportTypes = view Import.importTypes status'
+                  , cacheEval = fmap (\shared -> (status', shared)) twin
                   }
       return . Right $ (cache', expr'))
     `catch` (\e -> return . Left $ ErrorImportSourced e)
@@ -251,16 +267,25 @@ loadCollected settings (FileIdentifier chained) expr cache@Cache { cacheGraph = 
                set Import.verifySemanticHash False .
                set Import.importErrorMode Import.CollectErrors
                  $ emptyStatus
-  outcome <- try (runStateT (Import.loadWithHoles expr) status)
+  let customNormalizer = isJust (view Dhall.normalizer settings)
+      resolve
+          | customNormalizer = do
+              loaded <- Import.loadWithHoles expr
+              return (loaded, Nothing)
+          | otherwise = do
+              (loaded, shared) <- Import.loadCollectingShared expr
+              return (loaded, Just shared)
+  outcome <- try (runStateT resolve status)
   case outcome of
     Left ex ->
       return (Left (ErrorInternal ex))
-    Right (expr', status') -> do
+    Right ((expr', twin), status') -> do
       let cache' =
               Cache
                   { cacheGraph = view Import.graph status'
                   , cacheSemantics = view Import.cache status'
                   , cacheImportTypes = view Import.importTypes status'
+                  , cacheEval = fmap (\shared -> (status', shared)) twin
                   }
           errs = reverse (view Import.collectedImportErrors status')
           sources =
@@ -356,19 +381,58 @@ rememberFailure ref remote url = do
                     put st'
                     return result
 
--- | Typecheck a fully resolved expression. Returns a certification that the
---   input was well-typed along with its (well-typed) type.
+-- | Typecheck a parsed expression, using the types stored while it was loaded.
+--
+--   Falls back to the inlined expression when a child was not cached or a
+--   custom normalizer meant the load did not keep a 'Status'.
 typecheck
+    :: EvaluateSettings
+    -> Expr Src Import
+    -> Expr Src Void
+    -> Cache
+    -> IO (Either DhallError (WellTyped, WellTyped))
+typecheck settings parsed inlined cache =
+    case cacheEval cache of
+        Nothing ->
+            pure (typecheckInlined settings inlined)
+        Just (status, _) -> do
+            checked <-
+                evalStateT
+                    (Import.typecheckWithAlreadyCheckedImports
+                        (view Import.startingContext status)
+                        parsed)
+                    status
+            case checked of
+                Just (Right typ) ->
+                    pure (Right (WellTyped inlined, WellTyped typ))
+                Just (Left err) ->
+                    pure (Left (ErrorTypecheck err))
+                Nothing ->
+                    pure (typecheckInlined settings inlined)
+
+typecheckInlined
     :: EvaluateSettings
     -> Expr Src Void
     -> Either DhallError (WellTyped, WellTyped)
-typecheck settings expr = case Dhall.typeWith (view Dhall.startingContext settings) expr of
-  Left err -> Left $ ErrorTypecheck err
-  Right typ -> Right (WellTyped expr, WellTyped typ)
+typecheckInlined settings expr =
+    case Dhall.typeWith (view Dhall.startingContext settings) expr of
+        Left err ->
+            Left (ErrorTypecheck err)
+        Right typ ->
+            Right (WellTyped expr, WellTyped typ)
 
 -- | Normalise a well-typed expression.
-normalize :: EvaluateSettings -> WellTyped -> Normal
-normalize settings (WellTyped expr) = Normal $ Dhall.normalizeWith (view Dhall.normalizer settings) expr
+--
+--   A custom normalizer sees the inlined tree.  Otherwise the shared twin
+--   from 'load' or 'loadCollected' is evaluated, when this cache has one.
+normalize :: EvaluateSettings -> Cache -> WellTyped -> Normal
+normalize settings cache (WellTyped expr) =
+    Normal $
+        case (view Dhall.normalizer settings, cacheEval cache) of
+            (Nothing, Just (status, shared)) ->
+                Import.normalizeLoaded status shared
+            _ ->
+                Dhall.normalizeWith (view Dhall.normalizer settings) expr
 
 -- | Given a normal expression compute the hash (using the default standard
 --   version) of its alpha-normal form. Returns the hash in the format used in
