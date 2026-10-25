@@ -993,10 +993,11 @@ applySubstitutions denote expression = do
 --
 --   The type of an 'Embed' is the type already stored for that import.  Its
 --   value is the import's semantics, forced only when a @let@ or a conversion
---   needs it.  Returns 'Nothing' when a child has not been loaded yet (for
---   example the unused side of @?@), or when this check fails.  The caller
---   then type-checks the fully inlined expression, so a reported error points
---   at that expression.
+--   needs it.  An unused arm of @?@ is dropped first: resolution already kept
+--   only one arm, and the skipped arm is not in the cache.  Returns 'Nothing'
+--   when a child of the kept arm has not been loaded, or when this check
+--   fails.  The caller then type-checks the fully inlined expression, so a
+--   reported error points at that expression.
 --
 --   Haskell-API substitutions are applied to this file before the check.
 --   Those names live in 'Status', not in the starting context, so a parent
@@ -1009,14 +1010,15 @@ typecheckWithAlreadyCheckedImports
 typecheckWithAlreadyCheckedImports starting parsed = do
     Status { _stack } <- State.get
     let parent = NonEmpty.head _stack
-    available <- childrenCached parent parsed
+    chosen <- chooseResolvedArm parent parsed
+    available <- childrenCached parent chosen
     if not available
         then return Nothing
         else case startingTypingContext starting of
             Left err ->
                 return (Just (Left err))
             Right _ -> do
-                substituted <- applyStatusSubstitutions parsed
+                substituted <- applyStatusSubstitutions chosen
                 prepared <- importCheckEnvironment parent substituted
                 case prepared of
                     Nothing ->
@@ -1100,6 +1102,24 @@ startingTypingContext context =
         (\ctx (name, typ) -> Dhall.TypeCheck.extendBinder name typ ctx)
         Dhall.TypeCheck.emptyTypingContext
         (reverse (Dhall.Context.toList context))
+
+-- | Keep the arm of @?@ that resolution kept.
+--
+--   The parsed expression still contains both arms.  The arm that loaded is
+--   the one whose imports are all in the cache.  Checking the other arm would
+--   require imports that were never fetched, and the caller would then
+--   type-check the inlined file instead.
+chooseResolvedArm :: Chained -> Expr Src Import -> StateT Status IO (Expr Src Import)
+chooseResolvedArm parent (Note src expr) =
+    fmap (Note src) (chooseResolvedArm parent expr)
+chooseResolvedArm parent (ImportAlt left right) = do
+    chosenLeft <- chooseResolvedArm parent left
+    ready <- childrenCached parent chosenLeft
+    if ready
+        then return chosenLeft
+        else chooseResolvedArm parent right
+chooseResolvedArm parent expr =
+    Syntax.subExpressions (chooseResolvedArm parent) expr
 
 childrenCached :: Chained -> Expr Src Import -> StateT Status IO Bool
 childrenCached parent expr = do
