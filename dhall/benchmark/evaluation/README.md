@@ -153,7 +153,7 @@ read `evaluation` (or cold `dhall hash`).
 | `large3` | `large3/` | A | Sourcegraph-scale Code pipeline (~193 MB NF) |
 | `large3.get_config.*` | `large3/` | A | Small projection; still walks full graph |
 | `large4` | `large4/` | A | Medium customization tree |
-| `large5/` | A | Smaller tree |
+| `large5` | `large5/` | A | Wide local import tree sharing one large4 payload; normal form about 20.5 MB |
 | `large6.slow_*` | `large6/` | A, B, or C | Isolated ~0.5 s artificial burdens |
 | `large7.*` | `large7/` | parse + resolve, then four nf benches | Duplicated unhashed imports. `type_inlined` / `nf_inlined` walk the inlined tree; `type_compositional` / `nf_shared` do not. |
 | `import_overhead.*` | `import_overhead/` (some generated at prep) | D, E | Retained import data, custom normalizer, import alternatives, substitutions, starting context, projection vs force-all. See `import_overhead/README.md`. |
