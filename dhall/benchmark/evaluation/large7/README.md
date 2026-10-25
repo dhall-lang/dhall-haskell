@@ -28,7 +28,7 @@ cd dhall && stack bench evaluation --ba '--pattern large7'
 DHALL="$(stack exec -- which dhall)" ./benchmark/evaluation/large7/run.sh
 ```
 
-`run.sh` times three commands, and kills each one after 180s:
+`run.sh` times three commands:
 
 - `dhall type --quiet --file big.dhall`
 - `dhall --file big.dhall`
