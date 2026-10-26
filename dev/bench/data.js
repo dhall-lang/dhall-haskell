@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793039439606,
+  "lastUpdate": 1793049118179,
   "repoUrl": "https://github.com/dhall-lang/dhall-haskell",
   "entries": {
     "dhall": [
@@ -28845,6 +28845,2252 @@ window.BENCHMARK_DATA = {
             "range": "35.0017",
             "unit": "ms",
             "extra": "2*Stdev = 35.0017 ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "winitzki@users.noreply.github.com",
+            "name": "Sergei Winitzki",
+            "username": "winitzki"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9e737ba67c1f9fa02b413bea3d163eca1ddb6f49",
+          "message": "command-line option to disable remote imports  (#2882)\n\n* Reject remote URL imports before either cache is consulted.\n\nRemoteImportMode fails http and https imports of code, Text, and Bytes while leaving as Location, local files, and env imports alone. Unlike -f-with-http, the HTTP client stays linked and a hashed URL does not resolve from the semantic cache.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Add dhall --no-remote for resolve, diff, repl, and freeze.\n\nThe flag rejects fetching URL imports in every subcommand that resolves them, and the man page records how that differs from compiling without the HTTP client.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Add --no-remote to the conversion executables.\n\nThe helpers that resolve imports now take a remote-import mode, so each converter can reject URL imports without waiting on the test suites.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Add a noRemote setting to the language server.\n\nDiagnostics, hover, completion, and freeze-import read it on each request, so a configuration change rejects URL imports without restarting the server.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* Test that --no-remote rejects URL imports before the cache.\n\nExisting call sites now pass AllowRemoteImports, and the language server config test covers noRemote.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* adding explanations and cli-cache.sh\n\n* Explain how the Megaparsec parser follows dhall.abnf without copying it.\n\nThe note walks through the grammar-shaped shortcuts that keep the same language while skipping failed attempts and reading long stretches in one step.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n\n* add transformers to dependencies\n\n* fixing dhall-try build\n\n* add benchmark memory\n\n* making caching more durable for dhall-try\n\n---------\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+          "timestamp": "2026-10-26T21:58:51+01:00",
+          "tree_id": "519277fa6d372e129b8890d99a80f76be748cffd",
+          "url": "https://github.com/dhall-lang/dhall-haskell/commit/9e737ba67c1f9fa02b413bea3d163eca1ddb6f49"
+        },
+        "date": 1793049117172,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Prelude.issue 412",
+            "value": 0.027192019,
+            "range": "0.00176838",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00176838 ms"
+          },
+          {
+            "name": "Prelude.issue 412.allocated",
+            "value": 199492,
+            "unit": "bytes"
+          },
+          {
+            "name": "Prelude.issue 412.copied",
+            "value": 903,
+            "unit": "bytes"
+          },
+          {
+            "name": "Prelude.issue 412.peak",
+            "value": 7340032,
+            "unit": "bytes"
+          },
+          {
+            "name": "Prelude.union performance",
+            "value": 0.027380692,
+            "range": "0.00152507",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00152507 ms"
+          },
+          {
+            "name": "Prelude.union performance.allocated",
+            "value": 199538,
+            "unit": "bytes"
+          },
+          {
+            "name": "Prelude.union performance.copied",
+            "value": 891,
+            "unit": "bytes"
+          },
+          {
+            "name": "Prelude.union performance.peak",
+            "value": 7340032,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.typecheck",
+            "value": 0.014638637,
+            "range": "0.0012063",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0012063 ms"
+          },
+          {
+            "name": "normalize.ChurchEval.typecheck.allocated",
+            "value": 100316,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.typecheck.copied",
+            "value": 129,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.evaluation",
+            "value": 191.073178,
+            "range": "8.61607",
+            "unit": "ms",
+            "extra": "2*Stdev = 8.61607 ms"
+          },
+          {
+            "name": "normalize.ChurchEval.evaluation.allocated",
+            "value": 652721093,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.evaluation.copied",
+            "value": 359846,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ChurchEval.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.typecheck",
+            "value": 0.006597561,
+            "range": "0.000501494",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.000501494 ms"
+          },
+          {
+            "name": "normalize.FunCompose.typecheck.allocated",
+            "value": 49586,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.typecheck.copied",
+            "value": 37,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.evaluation",
+            "value": 254.6546773,
+            "range": "15.6665",
+            "unit": "ms",
+            "extra": "2*Stdev = 15.6665 ms"
+          },
+          {
+            "name": "normalize.FunCompose.evaluation.allocated",
+            "value": 288011744,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.evaluation.copied",
+            "value": 386425185,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.FunCompose.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.typecheck",
+            "value": 0.021373737,
+            "range": "0.00171365",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00171365 ms"
+          },
+          {
+            "name": "normalize.Iterate.typecheck.allocated",
+            "value": 99434,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.typecheck.copied",
+            "value": 105,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.evaluation",
+            "value": 49.377666,
+            "range": "3.1674",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.1674 ms"
+          },
+          {
+            "name": "normalize.Iterate.evaluation.allocated",
+            "value": 255652428,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.evaluation.copied",
+            "value": 95981738,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.Iterate.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.typecheck",
+            "value": 0.007289733,
+            "range": "0.000423096",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.000423096 ms"
+          },
+          {
+            "name": "normalize.IterateAlt.typecheck.allocated",
+            "value": 49226,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.typecheck.copied",
+            "value": 40,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.evaluation",
+            "value": 317.29972005,
+            "range": "10.1013",
+            "unit": "ms",
+            "extra": "2*Stdev = 10.1013 ms"
+          },
+          {
+            "name": "normalize.IterateAlt.evaluation.allocated",
+            "value": 326640712,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.evaluation.copied",
+            "value": 494219798,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.typecheck",
+            "value": 0.006555332,
+            "range": "0.000472568",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.000472568 ms"
+          },
+          {
+            "name": "normalize.IterateAlt2.typecheck.allocated",
+            "value": 43737,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.typecheck.copied",
+            "value": 34,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.evaluation",
+            "value": 241.016115375,
+            "range": "6.20998",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.20998 ms"
+          },
+          {
+            "name": "normalize.IterateAlt2.evaluation.allocated",
+            "value": 276238087,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.evaluation.copied",
+            "value": 404850876,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.IterateAlt2.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.typecheck",
+            "value": 0.026542036,
+            "range": "0.00179212",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00179212 ms"
+          },
+          {
+            "name": "normalize.ListBench.typecheck.allocated",
+            "value": 125452,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.typecheck.copied",
+            "value": 118,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.evaluation",
+            "value": 182.790317812,
+            "range": "4.38245",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.38245 ms"
+          },
+          {
+            "name": "normalize.ListBench.evaluation.allocated",
+            "value": 249021809,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.evaluation.copied",
+            "value": 253103403,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBench.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.typecheck",
+            "value": 0.021687469,
+            "range": "0.00085694",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00085694 ms"
+          },
+          {
+            "name": "normalize.ListBenchAlt.typecheck.allocated",
+            "value": 112356,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.typecheck.copied",
+            "value": 106,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.evaluation",
+            "value": 228.9226948,
+            "range": "18.2688",
+            "unit": "ms",
+            "extra": "2*Stdev = 18.2688 ms"
+          },
+          {
+            "name": "normalize.ListBenchAlt.evaluation.allocated",
+            "value": 264604108,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.evaluation.copied",
+            "value": 290603826,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.ListBenchAlt.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.typecheck",
+            "value": 0.000233833,
+            "range": "2.1068e-05",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.1068e-05 ms"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.typecheck.allocated",
+            "value": 2224,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.typecheck.copied",
+            "value": 0,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.evaluation",
+            "value": 0.005288105,
+            "range": "0.00036482",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00036482 ms"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.evaluation.allocated",
+            "value": 38546,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.evaluation.copied",
+            "value": 16,
+            "unit": "bytes"
+          },
+          {
+            "name": "normalize.NaturalFoldShortcut.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.parse",
+            "value": 89.8035514,
+            "range": "4.44959",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.44959 ms"
+          },
+          {
+            "name": "large1.parse.allocated",
+            "value": 747462053,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.parse.copied",
+            "value": 15644690,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.parse.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.resolve",
+            "value": 38.5263366,
+            "range": "2.9474",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.9474 ms"
+          },
+          {
+            "name": "large1.resolve.allocated",
+            "value": 218849185,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.resolve.copied",
+            "value": 11067185,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.resolve.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.typecheck",
+            "value": 41.0342154,
+            "range": "3.81501",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.81501 ms"
+          },
+          {
+            "name": "large1.typecheck.allocated",
+            "value": 195802160,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.typecheck.copied",
+            "value": 20093500,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.evaluation",
+            "value": 79.8418402,
+            "range": "1.94272",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.94272 ms"
+          },
+          {
+            "name": "large1.evaluation.allocated",
+            "value": 252524486,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.evaluation.copied",
+            "value": 47091707,
+            "unit": "bytes"
+          },
+          {
+            "name": "large1.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.normalize",
+            "value": 133.6870229,
+            "range": "1.20256",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.20256 ms"
+          },
+          {
+            "name": "large2.normalize.allocated",
+            "value": 560024559,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.normalize.copied",
+            "value": 140188650,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.normalize.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.encode",
+            "value": 298.4089642,
+            "range": "22.1642",
+            "unit": "ms",
+            "extra": "2*Stdev = 22.1642 ms"
+          },
+          {
+            "name": "large2.cbor.encode.allocated",
+            "value": 780014896,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.encode.copied",
+            "value": 428775086,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.encode.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.decode",
+            "value": 540.6787011,
+            "range": "18.9287",
+            "unit": "ms",
+            "extra": "2*Stdev = 18.9287 ms"
+          },
+          {
+            "name": "large2.cbor.decode.allocated",
+            "value": 6880558742,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.decode.copied",
+            "value": 391582306,
+            "unit": "bytes"
+          },
+          {
+            "name": "large2.cbor.decode.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.resolve",
+            "value": 1088.4671424,
+            "range": "4.55115",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.55115 ms"
+          },
+          {
+            "name": "k8s.file3.resolve.allocated",
+            "value": 3530790472,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.resolve.copied",
+            "value": 483148377,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.resolve.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.typecheck",
+            "value": 277.2197068,
+            "range": "12.9328",
+            "unit": "ms",
+            "extra": "2*Stdev = 12.9328 ms"
+          },
+          {
+            "name": "k8s.file3.typecheck.allocated",
+            "value": 1256490812,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.typecheck.copied",
+            "value": 29404318,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.evaluation",
+            "value": 0.365884717,
+            "range": "0.0315061",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0315061 ms"
+          },
+          {
+            "name": "k8s.file3.evaluation.allocated",
+            "value": 2807894,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.evaluation.copied",
+            "value": 149773,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file3.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.resolve",
+            "value": 1101.5895998,
+            "range": "75.7775",
+            "unit": "ms",
+            "extra": "2*Stdev = 75.7775 ms"
+          },
+          {
+            "name": "k8s.file4.resolve.allocated",
+            "value": 3389051584,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.resolve.copied",
+            "value": 483322281,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.resolve.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.typecheck",
+            "value": 86.0473244,
+            "range": "3.27969",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.27969 ms"
+          },
+          {
+            "name": "k8s.file4.typecheck.allocated",
+            "value": 259937132,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.typecheck.copied",
+            "value": 6443080,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.typecheck.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.evaluation",
+            "value": 0.2114759,
+            "range": "0.0121322",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0121322 ms"
+          },
+          {
+            "name": "k8s.file4.evaluation.allocated",
+            "value": 1548295,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.evaluation.copied",
+            "value": 37356,
+            "unit": "bytes"
+          },
+          {
+            "name": "k8s.file4.evaluation.peak",
+            "value": 1069547520,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.resolve",
+            "value": 1032.347947,
+            "range": "72.0561",
+            "unit": "ms",
+            "extra": "2*Stdev = 72.0561 ms"
+          },
+          {
+            "name": "large3.resolve.allocated",
+            "value": 5622174886,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.resolve.copied",
+            "value": 642116778,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.resolve.peak",
+            "value": 1134559232,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.typecheck",
+            "value": 3758.821297,
+            "range": "182.326",
+            "unit": "ms",
+            "extra": "2*Stdev = 182.326 ms"
+          },
+          {
+            "name": "large3.typecheck.allocated",
+            "value": 9295790649,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.typecheck.copied",
+            "value": 2399329019,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.typecheck.peak",
+            "value": 1134559232,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.evaluation",
+            "value": 735.2485543,
+            "range": "36.2771",
+            "unit": "ms",
+            "extra": "2*Stdev = 36.2771 ms"
+          },
+          {
+            "name": "large3.evaluation.allocated",
+            "value": 1066228247,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.evaluation.copied",
+            "value": 760069020,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.evaluation.peak",
+            "value": 1134559232,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.resolve",
+            "value": 1044.8327217,
+            "range": "89.8977",
+            "unit": "ms",
+            "extra": "2*Stdev = 89.8977 ms"
+          },
+          {
+            "name": "large3.get_config.resolve.allocated",
+            "value": 5622169885,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.resolve.copied",
+            "value": 642804276,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.typecheck",
+            "value": 4095.1953818,
+            "range": "81.7462",
+            "unit": "ms",
+            "extra": "2*Stdev = 81.7462 ms"
+          },
+          {
+            "name": "large3.get_config.typecheck.allocated",
+            "value": 9292402892,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.typecheck.copied",
+            "value": 2393758790,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.evaluation",
+            "value": 0.122937836,
+            "range": "0.0119922",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0119922 ms"
+          },
+          {
+            "name": "large3.get_config.evaluation.allocated",
+            "value": 945407,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.evaluation.copied",
+            "value": 11908,
+            "unit": "bytes"
+          },
+          {
+            "name": "large3.get_config.evaluation.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.resolve",
+            "value": 177.1378878,
+            "range": "7.59187",
+            "unit": "ms",
+            "extra": "2*Stdev = 7.59187 ms"
+          },
+          {
+            "name": "large4.resolve.allocated",
+            "value": 1377799292,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.resolve.copied",
+            "value": 59682875,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.typecheck",
+            "value": 257.8081594,
+            "range": "2.73806",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.73806 ms"
+          },
+          {
+            "name": "large4.typecheck.allocated",
+            "value": 1356414034,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.typecheck.copied",
+            "value": 82600616,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.evaluation",
+            "value": 1.041792328,
+            "range": "0.061408",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.061408 ms"
+          },
+          {
+            "name": "large4.evaluation.allocated",
+            "value": 4236814,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.evaluation.copied",
+            "value": 479337,
+            "unit": "bytes"
+          },
+          {
+            "name": "large4.evaluation.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.resolve",
+            "value": 75.0011918,
+            "range": "3.61656",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.61656 ms"
+          },
+          {
+            "name": "large5.resolve.allocated",
+            "value": 550532338,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.resolve.copied",
+            "value": 29595554,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.typecheck",
+            "value": 39.7997456,
+            "range": "2.52987",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.52987 ms"
+          },
+          {
+            "name": "large5.typecheck.allocated",
+            "value": 214775050,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.typecheck.copied",
+            "value": 11516472,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.evaluation",
+            "value": 45.7429452,
+            "range": "2.80326",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.80326 ms"
+          },
+          {
+            "name": "large5.evaluation.allocated",
+            "value": 135321651,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.evaluation.copied",
+            "value": 47191507,
+            "unit": "bytes"
+          },
+          {
+            "name": "large5.evaluation.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.resolve",
+            "value": 438.1378902,
+            "range": "32.0655",
+            "unit": "ms",
+            "extra": "2*Stdev = 32.0655 ms"
+          },
+          {
+            "name": "large6.slow_parse.resolve.allocated",
+            "value": 5663670692,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.resolve.copied",
+            "value": 13766498,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.typecheck",
+            "value": 0.000098501,
+            "range": "6.974e-06",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.974e-06 ms"
+          },
+          {
+            "name": "large6.slow_parse.typecheck.allocated",
+            "value": 1328,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.typecheck.copied",
+            "value": 0,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.evaluation",
+            "value": 0.000100242,
+            "range": "6.436e-06",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.436e-06 ms"
+          },
+          {
+            "name": "large6.slow_parse.evaluation.allocated",
+            "value": 1288,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.evaluation.copied",
+            "value": 0,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_parse.evaluation.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.resolve",
+            "value": 194.3421396,
+            "range": "6.97022",
+            "unit": "ms",
+            "extra": "2*Stdev = 6.97022 ms"
+          },
+          {
+            "name": "large6.slow_walk.resolve.allocated",
+            "value": 2570457670,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.resolve.copied",
+            "value": 39645923,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.typecheck",
+            "value": 0.614935909,
+            "range": "0.056773",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.056773 ms"
+          },
+          {
+            "name": "large6.slow_walk.typecheck.allocated",
+            "value": 4002913,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.typecheck.copied",
+            "value": 2787,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.evaluation",
+            "value": 1.095090987,
+            "range": "0.102321",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.102321 ms"
+          },
+          {
+            "name": "large6.slow_walk.evaluation.allocated",
+            "value": 9961584,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.evaluation.copied",
+            "value": 6577,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_walk.evaluation.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_eval.resolve_cold_cache_on",
+            "value": 0.748688345,
+            "range": "0.027364",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.027364 ms"
+          },
+          {
+            "name": "large6.slow_eval.resolve_cold_cache_on.allocated",
+            "value": 2880517,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_eval.resolve_cold_cache_on.copied",
+            "value": 23305,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_eval.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_typecheck.resolve_cold_cache_on",
+            "value": 262.6452952,
+            "range": "2.80921",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.80921 ms"
+          },
+          {
+            "name": "large6.slow_typecheck.resolve_cold_cache_on.allocated",
+            "value": 1923839937,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_typecheck.resolve_cold_cache_on.copied",
+            "value": 709078,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_typecheck.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_normalize.resolve_cold_cache_on",
+            "value": 214.7563166,
+            "range": "3.83724",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.83724 ms"
+          },
+          {
+            "name": "large6.slow_normalize.resolve_cold_cache_on.allocated",
+            "value": 1122113902,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_normalize.resolve_cold_cache_on.copied",
+            "value": 405422,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_normalize.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_multi.resolve_cold_cache_on",
+            "value": 184.0729002,
+            "range": "15.0765",
+            "unit": "ms",
+            "extra": "2*Stdev = 15.0765 ms"
+          },
+          {
+            "name": "large6.slow_multi.resolve_cold_cache_on.allocated",
+            "value": 908696534,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_multi.resolve_cold_cache_on.copied",
+            "value": 526540,
+            "unit": "bytes"
+          },
+          {
+            "name": "large6.slow_multi.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_compositional",
+            "value": 0.153211518,
+            "range": "0.0135584",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0135584 ms"
+          },
+          {
+            "name": "large7.type_compositional.allocated",
+            "value": 1161959,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_compositional.copied",
+            "value": 23858,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_compositional.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_shared",
+            "value": 1.589496759,
+            "range": "0.0537913",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0537913 ms"
+          },
+          {
+            "name": "large7.nf_shared.allocated",
+            "value": 8041668,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_shared.copied",
+            "value": 489593,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_shared.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_inlined",
+            "value": 10830.887499,
+            "range": "300.926",
+            "unit": "ms",
+            "extra": "2*Stdev = 300.926 ms"
+          },
+          {
+            "name": "large7.type_inlined.allocated",
+            "value": 38311511993,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_inlined.copied",
+            "value": 266349552,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.type_inlined.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_inlined",
+            "value": 2.105463562,
+            "range": "0.124445",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.124445 ms"
+          },
+          {
+            "name": "large7.nf_inlined.allocated",
+            "value": 10046647,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_inlined.copied",
+            "value": 913872,
+            "unit": "bytes"
+          },
+          {
+            "name": "large7.nf_inlined.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "prelude_import.resolve_cold_cache_on",
+            "value": 191.9925796,
+            "range": "14.2018",
+            "unit": "ms",
+            "extra": "2*Stdev = 14.2018 ms"
+          },
+          {
+            "name": "prelude_import.resolve_cold_cache_on.allocated",
+            "value": 964075715,
+            "unit": "bytes"
+          },
+          {
+            "name": "prelude_import.resolve_cold_cache_on.copied",
+            "value": 27236159,
+            "unit": "bytes"
+          },
+          {
+            "name": "prelude_import.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import.end_to_end_cold",
+            "value": 215.6981518,
+            "range": "10.1736",
+            "unit": "ms",
+            "extra": "2*Stdev = 10.1736 ms"
+          },
+          {
+            "name": "diamond_import.end_to_end_cold.allocated",
+            "value": 1121231710,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import.end_to_end_cold.copied",
+            "value": 366069,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import.end_to_end_cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import_transitive.end_to_end_cold",
+            "value": 212.9951624,
+            "range": "5.83183",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.83183 ms"
+          },
+          {
+            "name": "diamond_import_transitive.end_to_end_cold.allocated",
+            "value": 1124212478,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import_transitive.end_to_end_cold.copied",
+            "value": 394340,
+            "unit": "bytes"
+          },
+          {
+            "name": "diamond_import_transitive.end_to_end_cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.resolve_cold_cache_on",
+            "value": 88.8656986,
+            "range": "3.1248",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.1248 ms"
+          },
+          {
+            "name": "substitutions.resolve_cold_cache_on.allocated",
+            "value": 969583657,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.resolve_cold_cache_on.copied",
+            "value": 25072796,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.many_files.resolve_cold_cache_on",
+            "value": 38.7673252,
+            "range": "2.32692",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.32692 ms"
+          },
+          {
+            "name": "substitutions.many_files.resolve_cold_cache_on.allocated",
+            "value": 166091686,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.many_files.resolve_cold_cache_on.copied",
+            "value": 4745639,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.many_files.resolve_cold_cache_on.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.end_to_end_cold",
+            "value": 463.1989044,
+            "range": "8.94135",
+            "unit": "ms",
+            "extra": "2*Stdev = 8.94135 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.end_to_end_cold.allocated",
+            "value": 3814866628,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.end_to_end_cold.copied",
+            "value": 97521351,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.end_to_end_cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.cold",
+            "value": 162.4955656,
+            "range": "5.80452",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.80452 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.cold.allocated",
+            "value": 1228557102,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.cold.copied",
+            "value": 41295301,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.warm",
+            "value": 54.5005484,
+            "range": "2.00857",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.00857 ms"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.warm.allocated",
+            "value": 390277714,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.warm.copied",
+            "value": 27861632,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.composer_proxy.many_imports.warm.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.naive",
+            "value": 10.578045025,
+            "range": "0.563673",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.563673 ms"
+          },
+          {
+            "name": "substitutions.shift_cost.naive.allocated",
+            "value": 185250470,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.naive.copied",
+            "value": 896844,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.naive.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.optimized",
+            "value": 0.85495639,
+            "range": "0.0530439",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0530439 ms"
+          },
+          {
+            "name": "substitutions.shift_cost.optimized.allocated",
+            "value": 6250936,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.optimized.copied",
+            "value": 7973,
+            "unit": "bytes"
+          },
+          {
+            "name": "substitutions.shift_cost.optimized.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.default",
+            "value": 55.2614578,
+            "range": "2.82218",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.82218 ms"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.default.allocated",
+            "value": 155277061,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.default.copied",
+            "value": 9647152,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.default.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.custom",
+            "value": 53.7805458,
+            "range": "1.08231",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.08231 ms"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.custom.allocated",
+            "value": 156901536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.custom.copied",
+            "value": 9482790,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.cold.custom.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.default",
+            "value": 51.8405461,
+            "range": "4.46184",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.46184 ms"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.default.allocated",
+            "value": 159124950,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.default.copied",
+            "value": 9622172,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.default.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.custom",
+            "value": 63.934540137,
+            "range": "5.90198",
+            "unit": "ms",
+            "extra": "2*Stdev = 5.90198 ms"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.custom.allocated",
+            "value": 160674546,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.custom.copied",
+            "value": 23440926,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.custom_normalizer.warm.custom.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.cold",
+            "value": 27.5950405,
+            "range": "1.27171",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.27171 ms"
+          },
+          {
+            "name": "import_overhead.import_alt.cold.allocated",
+            "value": 113005100,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.cold.copied",
+            "value": 3784767,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.warm",
+            "value": 32.867062218,
+            "range": "2.43111",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.43111 ms"
+          },
+          {
+            "name": "import_overhead.import_alt.warm.allocated",
+            "value": 115623431,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.warm.copied",
+            "value": 10732361,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.warm.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.typecheck",
+            "value": 0.009120566,
+            "range": "0.000661004",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.000661004 ms"
+          },
+          {
+            "name": "import_overhead.import_alt.typecheck.allocated",
+            "value": 62330,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.typecheck.copied",
+            "value": 28,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.import_alt.typecheck.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.root_substitutions.resolve",
+            "value": 0.150702124,
+            "range": "0.0107693",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0107693 ms"
+          },
+          {
+            "name": "import_overhead.root_substitutions.resolve.allocated",
+            "value": 506158,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.root_substitutions.resolve.copied",
+            "value": 3041,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.root_substitutions.resolve.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.cold",
+            "value": 24.34196255,
+            "range": "2.33066",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.33066 ms"
+          },
+          {
+            "name": "import_overhead.starting_context.cold.allocated",
+            "value": 77595834,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.cold.copied",
+            "value": 4164429,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.warm",
+            "value": 24.915391,
+            "range": "2.2497",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.2497 ms"
+          },
+          {
+            "name": "import_overhead.starting_context.warm.allocated",
+            "value": 80126030,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.warm.copied",
+            "value": 4133452,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.starting_context.warm.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.projection.end_to_end_cold",
+            "value": 50.9974876,
+            "range": "4.00026",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.00026 ms"
+          },
+          {
+            "name": "import_overhead.projection.end_to_end_cold.allocated",
+            "value": 262632851,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.projection.end_to_end_cold.copied",
+            "value": 4431770,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.projection.end_to_end_cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.force_all.end_to_end_cold",
+            "value": 52.241256,
+            "range": "1.44358",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.44358 ms"
+          },
+          {
+            "name": "import_overhead.force_all.end_to_end_cold.allocated",
+            "value": 263450592,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.force_all.end_to_end_cold.copied",
+            "value": 4494561,
+            "unit": "bytes"
+          },
+          {
+            "name": "import_overhead.force_all.end_to_end_cold.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.full",
+            "value": 24.698354,
+            "range": "1.68541",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.68541 ms"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.full.allocated",
+            "value": 226499864,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.full.copied",
+            "value": 102395,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.full.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.early_abort",
+            "value": 0.727045709,
+            "range": "0.0527034",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.0527034 ms"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.early_abort.allocated",
+            "value": 6554719,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.early_abort.copied",
+            "value": 3595,
+            "unit": "bytes"
+          },
+          {
+            "name": "semisemantic.nf_size_walk.early_abort.peak",
+            "value": 1138753536,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Text",
+            "value": 3.447646762,
+            "range": "0.293685",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.293685 ms"
+          },
+          {
+            "name": "Issue #108.Text.allocated",
+            "value": 31883628,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Text.copied",
+            "value": 642871,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Text.peak",
+            "value": 7340032,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Binary",
+            "value": 0.073519162,
+            "range": "0.00277752",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.00277752 ms"
+          },
+          {
+            "name": "Issue #108.Binary.allocated",
+            "value": 1010507,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Binary.copied",
+            "value": 6343,
+            "unit": "bytes"
+          },
+          {
+            "name": "Issue #108.Binary.peak",
+            "value": 7340032,
+            "unit": "bytes"
+          },
+          {
+            "name": "Kubernetes/Binary",
+            "value": 217.5809578,
+            "range": "20.6508",
+            "unit": "ms",
+            "extra": "2*Stdev = 20.6508 ms"
+          },
+          {
+            "name": "Kubernetes/Binary.allocated",
+            "value": 867774617,
+            "unit": "bytes"
+          },
+          {
+            "name": "Kubernetes/Binary.copied",
+            "value": 161634775,
+            "unit": "bytes"
+          },
+          {
+            "name": "Kubernetes/Binary.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested parentheses",
+            "value": 8.28666665,
+            "range": "0.204622",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.204622 ms"
+          },
+          {
+            "name": "Deeply nested parentheses.allocated",
+            "value": 59156015,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested parentheses.copied",
+            "value": 7410145,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested parentheses.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested brackets",
+            "value": 7.981870625,
+            "range": "0.466867",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.466867 ms"
+          },
+          {
+            "name": "Deeply nested brackets.allocated",
+            "value": 65361543,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested brackets.copied",
+            "value": 7715207,
+            "unit": "bytes"
+          },
+          {
+            "name": "Deeply nested brackets.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long variable names",
+            "value": 13.83535295,
+            "range": "1.36556",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.36556 ms"
+          },
+          {
+            "name": "Long variable names.allocated",
+            "value": 137065812,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long variable names.copied",
+            "value": 101332,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long variable names.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large number of function arguments",
+            "value": 21.643106,
+            "range": "1.48576",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.48576 ms"
+          },
+          {
+            "name": "Large number of function arguments.allocated",
+            "value": 267898933,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large number of function arguments.copied",
+            "value": 9533655,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large number of function arguments.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long double-quoted strings (10M chars)",
+            "value": 96.0776454,
+            "range": "4.38223",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.38223 ms"
+          },
+          {
+            "name": "Long double-quoted strings (10M chars).allocated",
+            "value": 1046109548,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long double-quoted strings (10M chars).copied",
+            "value": 298464,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long double-quoted strings (10M chars).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long single-quoted strings (10M chars)",
+            "value": 85.3923885,
+            "range": "2.02909",
+            "unit": "ms",
+            "extra": "2*Stdev = 2.02909 ms"
+          },
+          {
+            "name": "Long single-quoted strings (10M chars).allocated",
+            "value": 1040077426,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long single-quoted strings (10M chars).copied",
+            "value": 168515,
+            "unit": "bytes"
+          },
+          {
+            "name": "Long single-quoted strings (10M chars).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits)",
+            "value": 87.7029028,
+            "range": "8.12631",
+            "unit": "ms",
+            "extra": "2*Stdev = 8.12631 ms"
+          },
+          {
+            "name": "Large natural number literal (10M digits).allocated",
+            "value": 1042123700,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits).copied",
+            "value": 180370,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits)",
+            "value": 88.8792486,
+            "range": "1.72608",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.72608 ms"
+          },
+          {
+            "name": "Large hex number literal (10M digits).allocated",
+            "value": 1040080847,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits).copied",
+            "value": 166395,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits)",
+            "value": 87.7172508,
+            "range": "1.91275",
+            "unit": "ms",
+            "extra": "2*Stdev = 1.91275 ms"
+          },
+          {
+            "name": "Large binary number literal (10M digits).allocated",
+            "value": 1040080447,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits).copied",
+            "value": 164006,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits, forced)",
+            "value": 905.7666554,
+            "range": "65.5125",
+            "unit": "ms",
+            "extra": "2*Stdev = 65.5125 ms"
+          },
+          {
+            "name": "Large natural number literal (10M digits, forced).allocated",
+            "value": 1707437587,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits, forced).copied",
+            "value": 608806,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large natural number literal (10M digits, forced).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits, forced)",
+            "value": 172.4023372,
+            "range": "11.1255",
+            "unit": "ms",
+            "extra": "2*Stdev = 11.1255 ms"
+          },
+          {
+            "name": "Large hex number literal (10M digits, forced).allocated",
+            "value": 1539736092,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits, forced).copied",
+            "value": 523300,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large hex number literal (10M digits, forced).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits, forced)",
+            "value": 128.4058054,
+            "range": "3.48016",
+            "unit": "ms",
+            "extra": "2*Stdev = 3.48016 ms"
+          },
+          {
+            "name": "Large binary number literal (10M digits, forced).allocated",
+            "value": 1163027197,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits, forced).copied",
+            "value": 244604,
+            "unit": "bytes"
+          },
+          {
+            "name": "Large binary number literal (10M digits, forced).peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Whitespace",
+            "value": 9.55776805,
+            "range": "0.784549",
+            "unit": "ms",
+            "extra": "2*Stdev = 0.784549 ms"
+          },
+          {
+            "name": "Whitespace.allocated",
+            "value": 104066442,
+            "unit": "bytes"
+          },
+          {
+            "name": "Whitespace.copied",
+            "value": 17686,
+            "unit": "bytes"
+          },
+          {
+            "name": "Whitespace.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Line comment",
+            "value": 194.7952084,
+            "range": "10.4484",
+            "unit": "ms",
+            "extra": "2*Stdev = 10.4484 ms"
+          },
+          {
+            "name": "Line comment.allocated",
+            "value": 2184145372,
+            "unit": "bytes"
+          },
+          {
+            "name": "Line comment.copied",
+            "value": 368014,
+            "unit": "bytes"
+          },
+          {
+            "name": "Line comment.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "Block comment",
+            "value": 137.3521422,
+            "range": "4.40518",
+            "unit": "ms",
+            "extra": "2*Stdev = 4.40518 ms"
+          },
+          {
+            "name": "Block comment.allocated",
+            "value": 2736809249,
+            "unit": "bytes"
+          },
+          {
+            "name": "Block comment.copied",
+            "value": 455355,
+            "unit": "bytes"
+          },
+          {
+            "name": "Block comment.peak",
+            "value": 146800640,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.parse",
+            "value": 655.7274482,
+            "range": "21.9721",
+            "unit": "ms",
+            "extra": "2*Stdev = 21.9721 ms"
+          },
+          {
+            "name": "CPkg.parse.allocated",
+            "value": 5558572360,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.parse.copied",
+            "value": 93288342,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.parse.peak",
+            "value": 179306496,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.Text",
+            "value": 695.5648258,
+            "range": "18.4948",
+            "unit": "ms",
+            "extra": "2*Stdev = 18.4948 ms"
+          },
+          {
+            "name": "CPkg.Text.allocated",
+            "value": 5609025706,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.Text.copied",
+            "value": 113953177,
+            "unit": "bytes"
+          },
+          {
+            "name": "CPkg.Text.peak",
+            "value": 229638144,
+            "unit": "bytes"
           }
         ]
       }
