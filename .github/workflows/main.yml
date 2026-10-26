@@ -3,10 +3,9 @@ env:
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
-# pull_request caches live on the merge ref and are invisible to other PRs.
-# The benchmarks workflow only warms the Ubuntu stack.yaml cache on main, so
-# macOS and Windows (and the other GHC jobs) start cold on every new PR unless
-# a push to main writes those caches into the default-branch scope.
+# Caches written by pull_request are stored on the merge ref and are invisible
+# to other PRs. push to main writes the default-branch copies that later PRs
+# restore. Which jobs are cached, and how the key is built, is on the Cache step.
 on:
   pull_request:
   push:
@@ -65,12 +64,24 @@ jobs:
           enable-stack: true
           stack-version: "latest"
           stack-no-global: true
+      # Cache the required builds only: Ubuntu stack.yaml (GHC 9.6), macOS, and Windows.
+      # The other resolvers (stack.ghc-8.10.yaml, 9.2, 9.4, 9.8, 9.10, 9.12) skip
+      # this step. Skipping actions/cache skips both the restore and the post-job
+      # save. Each of those snapshots is about 1.5 GB, and the repository cache
+      # quota is 10 GB, so saving them was evicting the required entries.
+      #
+      # Key: runner, arch, cache_generation, and a hash of that job's Stack file.
+      # There is no restore-keys prefix. The old prefix matched every Ubuntu
+      # snapshot, so a miss downloaded another GHC and the post step saved that
+      # tree under this job's key. An exact hit still restores the right snapshot.
+      # The path is the Stack root only (the compiler and the snapshot packages).
+      # .stack-work stays in the checkout, so local packages rebuild on every run.
+      # bench.yml uses this same Ubuntu key. dhall-try has its own Nix cache below.
       - name: "Cache"
+        if: matrix.stack-yaml == 'stack.yaml'
         uses: actions/cache@v6
         with:
           key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles(matrix.stack-yaml) }}
-          restore-keys: |
-            ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       # Workaround for Ubuntu 26.04 that no longer has ld.gold but Stack's GHC bindist thinks it's still there (cached from Ubuntu 24.04)
@@ -230,6 +241,11 @@ jobs:
           extra_nix_config: |
             extra-substituters = https://cache.dhall-lang.org https://dhall.cachix.org
             extra-trusted-public-keys = cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM= dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo=
+      # dhall-try is a Nix build, so it does not use the Stack cache above.
+      # It stays cached because the JavaScript build is part of the required set.
+      # primary-key changes when nix/pinnedNixpkgs.nix or nix/javascript.nix changes.
+      # An older store can be restored from the nix-js-<os>- prefix. purge-primary-key
+      # is never, so that restore does not delete the current entry.
       - name: "Cache Nix store"
         uses: nix-community/cache-nix-action@v7
         with:

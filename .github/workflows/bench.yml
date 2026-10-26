@@ -52,12 +52,16 @@ jobs:
           enable-stack: true
           stack-version: "latest"
           stack-no-global: true
+      # Same cache as the Ubuntu stack.yaml job in main.yml. Required builds keep
+      # that snapshot; the extra GHC jobs do not use the cache at all (see the
+      # Cache step comment in main.yml). The key is ubuntu-latest, arch,
+      # cache_generation, and the hash of stack.yaml, with no restore-keys prefix.
+      # A prefix would also match leftover extra-GHC snapshots, and a miss would
+      # then save the wrong tree under this key.
       - name: "Cache"
         uses: actions/cache@v6
         with:
           key: ubuntu-latest-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles('stack.yaml') }}
-          restore-keys: |
-            ubuntu-latest-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
       - name: "Install libsodium"
