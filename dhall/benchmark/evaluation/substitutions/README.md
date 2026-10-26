@@ -114,9 +114,9 @@ CLI wall-clock of the same four pipelines, **without** Haskell substitutions
 - nested-let `pipeline-code.dhall`
 - many-files tree generated into a temp directory (not checked in)
 
-Each `run.sh` sample uses a fresh `XDG_CACHE_HOME`. That is a Mode B
-analogue for import load, but it is still a full `dhall --file` evaluate,
-not `resolveWithSettings`.
+Each command is timed twice in a private `XDG_CACHE_HOME`: `*-cold` on an
+empty cache, then `*-warm` on that same cache. The directory is deleted on
+exit. This is still a full `dhall --file` evaluate, not `resolveWithSettings`.
 
 `ResolvedSubstitutions` is computed once per run and stored on import
 `Status` (not on public `EvaluateSettings`). `shiftSubstitutions` identity

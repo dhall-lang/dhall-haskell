@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run every evaluation fixture that has a CLI `run.sh`, using the dhall
 # executable below. Writes a tasty-bench-shaped CSV named
-# results-evaluation_cli-results-<short-hash>.csv in the current directory.
+# results-evaluation_cli-<short-hash>.csv in the current directory.
+# Pass --commit <hash> to name the file after that commit instead of HEAD.
 #
 # Each row is a single end-to-end CLI sample (parse + resolve + typecheck +
 # normalize), so 2*Stdev is 0. These are not the Haskell phase benches.
@@ -11,10 +12,42 @@
 # gets its own budget, and it is not a wall-clock cap. If a command is killed
 # before bash `time` prints, the elapsed time is still recorded as a
 # __BENCH_TIME__ sample. Later run.sh scripts run either way.
+#
+# This script sets a temporary XDG_CACHE_HOME and deletes it on exit. Each
+# run.sh replaces that with its own temporary cache, also deleted on exit, so
+# one fixture cannot warm the next and neither uses ~/.cache/dhall.
 set -euo pipefail
 
 # Path to the dhall executable. Edit this, or override with the DHALL env var.
 DHALL="${DHALL:-dhall}"
+
+# Optional: --commit <hash> names the CSV after that commit instead of HEAD.
+# The hash may be short or long. The file uses the 8-character form.
+COMMIT=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --commit)
+            if [[ $# -lt 2 || -z "${2:-}" ]]; then
+                echo "error: --commit requires a commit hash" >&2
+                exit 1
+            fi
+            COMMIT=$2
+            shift 2
+            ;;
+        --commit=*)
+            COMMIT=${1#--commit=}
+            if [[ -z "${COMMIT}" ]]; then
+                echo "error: --commit requires a commit hash" >&2
+                exit 1
+            fi
+            shift
+            ;;
+        *)
+            echo "error: unknown argument: $1" >&2
+            exit 1
+            ;;
+    esac
+done
 
 # CPU seconds for `ulimit -t`. Override with CPU_LIMIT_SECONDS.
 CPU_LIMIT_SECONDS="${CPU_LIMIT_SECONDS:-$((6 * 60))}"
@@ -26,7 +59,14 @@ STATUS_MARK='__DHALL_BENCH_STATUS__'
 export TIMEFORMAT="${TIME_TAG} %6R"
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
-HASH=$(git -C "${ROOT}" rev-parse --short=8 HEAD)
+if [[ -n "${COMMIT}" ]]; then
+    if ! HASH=$(git -C "${ROOT}" rev-parse --short=8 --verify "${COMMIT}^{commit}" 2>/dev/null); then
+        echo "error: not a commit: ${COMMIT}" >&2
+        exit 1
+    fi
+else
+    HASH=$(git -C "${ROOT}" rev-parse --short=8 HEAD)
+fi
 OUT="${PWD}/results-evaluation_cli-${HASH}.csv"
 
 if [[ -f "${DHALL}" && -x "${DHALL}" ]]; then
@@ -38,6 +78,13 @@ else
     exit 1
 fi
 export DHALL
+
+SUITE_CACHE=$(mktemp -d "${TMPDIR:-/tmp}/dhall-cli-suite.XXXXXX")
+export XDG_CACHE_HOME="${SUITE_CACHE}"
+cleanup_suite_cache() {
+    rm -rf "${SUITE_CACHE}"
+}
+trap cleanup_suite_cache EXIT
 
 csv_name() {
     local group=$1
@@ -106,6 +153,7 @@ commit_pending_sample() {
 
 echo "Using dhall: ${DHALL}" >&2
 echo "CPU limit: ${CPU_LIMIT_SECONDS}s per process (ulimit -t)" >&2
+echo "Suite cache: ${SUITE_CACHE}" >&2
 echo "Writing: ${OUT}" >&2
 echo >&2
 

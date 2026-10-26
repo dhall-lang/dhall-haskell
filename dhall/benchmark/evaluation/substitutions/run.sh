@@ -10,7 +10,7 @@
 # map. Use `stack bench evaluation --ba '--pattern substitutions'` for the
 # customer-shaped measurement.
 #
-# Each timed run uses a fresh XDG_CACHE_HOME (Mode B analogue).
+# Each file is timed on an empty cache and then again on that cache.
 #
 # Runnable from any directory.
 set -euo pipefail
@@ -20,23 +20,12 @@ cd "${HERE}"
 DHALL="${DHALL:-dhall}"
 # Keep in sync with manyFilesModuleCount in evaluation/Main.hs.
 MANY_FILES_MODULE_COUNT=200
+# shellcheck source=../cli-cache.sh
+source "${HERE}/../cli-cache.sh"
+dhall_cli_cache_begin
 
 echo "Note: CLI has no InputSettings substitutions; this is not the Haskell substitutions.* bench."
 echo
-
-time_dhall() {
-    local label=$1
-    local file=$2
-    local cache
-    cache=$(mktemp -d "${TMPDIR:-/tmp}/dhall-substitutions-cache.XXXXXX")
-    echo "=== ${label}: dhall --file ${file} (fresh XDG_CACHE_HOME) ==="
-    (
-        export XDG_CACHE_HOME="${cache}"
-        time "${DHALL}" --file "${file}" > /dev/null
-    )
-    rm -rf "${cache}"
-    echo
-}
 
 generate_many_files_tree() {
     local root=$1
@@ -69,12 +58,20 @@ EOF
     echo './package.dhall' > "${root}/pipeline-code.dhall"
 }
 
+cleanup_many_root() {
+    if [[ -n "${MANY_ROOT:-}" ]]; then
+        rm -rf "${MANY_ROOT}"
+    fi
+}
+
 echo "--- substitutions.as_code (nested lets) ---"
-time_dhall "substitutions.as_code" "${HERE}/pipeline-code.dhall"
+dhall_cli_time_cold_warm "substitutions.as_code" \
+    "${DHALL}" --file "${HERE}/pipeline-code.dhall"
 
 MANY_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/dhall-substitutions-many-files.XXXXXX")
-trap 'rm -rf "${MANY_ROOT}"' EXIT
+dhall_cli_on_exit cleanup_many_root
 
 echo "--- substitutions.many_files.* (generating ${MANY_FILES_MODULE_COUNT} modules) ---"
 generate_many_files_tree "${MANY_ROOT}"
-time_dhall "substitutions.many_files.as_code" "${MANY_ROOT}/pipeline-code.dhall"
+dhall_cli_time_cold_warm "substitutions.many_files.as_code" \
+    "${DHALL}" --file "${MANY_ROOT}/pipeline-code.dhall"

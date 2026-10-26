@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Cold-ish CLI timing of the large1 fixture (Haskell: large1.parse/resolve/typecheck/evaluation).
+# CLI timing of the large1 fixture.
+# Timed on an empty cache and then again on that cache.
 # Runnable from any directory.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 cd "${HERE}"
 DHALL="${DHALL:-dhall}"
+# shellcheck source=../cli-cache.sh
+source "${HERE}/../cli-cache.sh"
+dhall_cli_cache_begin
 
-echo "=== dhall --file main.dhall ==="
-time "${DHALL}" --file main.dhall > /dev/null
-echo
+dhall_cli_time_cold_warm main "${DHALL}" --file main.dhall
