@@ -11,6 +11,7 @@ import Data.ByteString     (ByteString)
 import Data.Text           (Text)
 import Dhall.JSON          (parseConversion, parsePreservationAndOmission)
 import Dhall.JSON.Yaml     (Options (..), parseDocuments, parseQuoted)
+import Dhall.Import        (RemoteImportMode (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -35,6 +36,7 @@ parseOptions =
             <*> optional parseOutput
             <*> parseNoEdit
             <*> parsePreserveHeader
+            <*> parseNoRemote
             )
     <|> parseVersion
   where
@@ -78,6 +80,13 @@ parseOptions =
            (   Options.long "preserve-header"
            <>  Options.help "Translate any Dhall comment header to a YAML comment header"
            )
+
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
 
 parserInfo :: ParserInfo (Maybe Options)
 parserInfo =

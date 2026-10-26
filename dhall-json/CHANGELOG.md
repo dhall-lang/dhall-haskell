@@ -1,3 +1,11 @@
+1.7.14
+
+* `codeToValue`, `codeToHeaderAndValue`, and `resolveSchemaExpr` take a
+  `RemoteImportMode`. `dhall-to-json`, `json-to-dhall`, `dhall-to-yaml`, and
+  `dhall-to-yaml-ng` accept `--no-remote`, which rejects http and https
+  imports used as code, as Text, or as Bytes, including integrity-checked
+  cache hits.
+
 1.7.13
 
 * [Export `UnionConv`](https://github.com/dhall-lang/dhall-haskell/pull/2570)

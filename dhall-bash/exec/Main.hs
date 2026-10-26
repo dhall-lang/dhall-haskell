@@ -16,6 +16,7 @@ import Options.Applicative
 import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.ByteString
 import qualified Data.Text.IO
 import qualified Data.Version
@@ -32,6 +33,7 @@ data Options = Options
     { explain :: Bool
     , declare :: Maybe Text
     , version :: Bool
+    , noRemote :: Bool
     } deriving (Generic)
 
 -- | Parser for all the command arguments and options
@@ -51,6 +53,11 @@ parseOptions = do
     version <- switch
         ( long "version"
         <> help "Display version"
+        )
+
+    noRemote <- switch
+        ( long "no-remote"
+        <> help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
         )
 
     pure Options{..}
@@ -81,8 +88,23 @@ main = do
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 
-        (expr', inferred) <-
-            Dhall.Import.loadRelativeToAndTypecheck "." Dhall.Import.UseSemanticCache expr
+        let remoteImportMode =
+                if noRemote
+                then Dhall.Import.RejectRemoteImports
+                else Dhall.Import.AllowRemoteImports
+
+        let status =
+                (Dhall.Import.emptyStatus ".")
+                    { Dhall.Import._remoteImportMode = remoteImportMode }
+
+        (expr', status') <-
+            State.runStateT (Dhall.Import.loadWith expr) status
+
+        inferred <-
+            State.evalStateT
+                (Dhall.Import.typecheckLoaded expr expr')
+                status'
+
         case inferred of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()

@@ -10,6 +10,7 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.Text           (Text)
 import Data.Version        (showVersion)
+import Dhall.Import        (RemoteImportMode (..))
 import Dhall.JSONToDhall   (Conversion, parseConversion)
 import Dhall.Pretty        (CharacterSet (..))
 import Dhall.YamlToDhall   (Options (..), dhallFromYaml)
@@ -37,6 +38,7 @@ data CommandOptions
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
+        , remoteImportMode :: RemoteImportMode
         }
     | Type
         { file       :: Maybe FilePath
@@ -66,6 +68,7 @@ parseOptions =
         <*> optional parseOutput
         <*> parseASCII
         <*> parsePlain
+        <*> parseNoRemote
         )
     <|> parseVersion
   where
@@ -123,6 +126,13 @@ parseOptions =
             <>  Options.help "Disable syntax highlighting"
             )
 
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
+
 -- ----------
 -- Main
 -- ----------
@@ -151,7 +161,7 @@ main = do
             handle $ do
                 yaml <- toBytes file
 
-                expression <- dhallFromYaml (Options schema conversion) yaml
+                expression <- dhallFromYaml (Options schema conversion remoteImportMode) yaml
 
                 Dhall.Util.renderExpression characterSet plain output expression
 

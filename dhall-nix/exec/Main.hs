@@ -12,6 +12,7 @@ import Options.Generic   (Generic, ParseRecord, type (<?>) (..))
 import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text.IO
 import qualified Data.Version
 import qualified Dhall
@@ -28,6 +29,8 @@ import qualified System.IO
 data Options = Options
     { version :: Bool
         <?> "Display version"
+    , noRemote :: Bool
+        <?> "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
     } deriving (Generic, ParseRecord)
 
 main :: IO ()
@@ -47,8 +50,23 @@ main = handle (Dhall.detailed (do
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 
-    (expr', inferred) <-
-        Dhall.Import.loadRelativeToAndTypecheck "." Dhall.Import.UseSemanticCache expr
+    let remoteImportMode =
+            if unHelpful noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus ".")
+                { Dhall.Import._remoteImportMode = remoteImportMode }
+
+    (expr', status') <-
+        State.runStateT (Dhall.Import.loadWith expr) status
+
+    inferred <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded expr expr')
+            status'
+
     case inferred of
         Left  err -> Control.Exception.throwIO err
         Right _   -> return ()

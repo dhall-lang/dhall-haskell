@@ -1,3 +1,10 @@
+1.0.5
+
+* `fileToDhall`, `inputToDhall`, and `textToDhall` take a `RemoteImportMode`.
+  `dhall-to-toml` and `toml-to-dhall` accept `--no-remote`, which rejects http
+  and https imports used as code, as Text, or as Bytes, including
+  integrity-checked cache hits.
+
 1.0.4
 
 * [Add support for `Prelude.Map.Type`](https://github.com/dhall-lang/dhall-haskell/pull/2549)

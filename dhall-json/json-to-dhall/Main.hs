@@ -10,6 +10,7 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException, throwIO)
 import Data.Text           (Text)
 import Data.Version        (showVersion)
+import Dhall.Import        (RemoteImportMode (..))
 import Dhall.JSONToDhall
 import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
@@ -46,6 +47,7 @@ data Options
         , output     :: Maybe FilePath
         , ascii      :: Bool
         , plain      :: Bool
+        , remoteImportMode :: RemoteImportMode
         }
     | Type
         { file       :: Maybe FilePath
@@ -67,6 +69,7 @@ parseOptions =
         <*> optional parseOutput
         <*> parseASCII
         <*> parsePlain
+        <*> parseNoRemote
         )
     <|> parseVersion
   where
@@ -126,6 +129,13 @@ parseOptions =
             <>  Options.help "Disable syntax highlighting"
             )
 
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
+
 -- ----------
 -- Main
 -- ----------
@@ -149,9 +159,9 @@ main = do
                 Left err -> throwIO (userError err)
                 Right v -> pure v
 
-    let toSchema schema value = do
+    let toSchema remoteImportMode schema value = do
             finalSchema <- case schema of
-                Just text -> resolveSchemaExpr text
+                Just text -> resolveSchemaExpr remoteImportMode text
                 Nothing   -> return (schemaToDhallType (inferSchema value))
 
             typeCheckSchemaExpr id finalSchema
@@ -166,7 +176,7 @@ main = do
             handle $ do
                 value <- toValue file
 
-                finalSchema <- toSchema schema value
+                finalSchema <- toSchema remoteImportMode schema value
 
                 expression <- Dhall.Core.throws (dhallFromJSON conversion finalSchema value)
 
@@ -178,7 +188,7 @@ main = do
             handle $ do
                 value <- toValue file
 
-                finalSchema <- toSchema Nothing value
+                finalSchema <- toSchema AllowRemoteImports Nothing value
 
                 Dhall.Util.renderExpression characterSet plain output finalSchema
 

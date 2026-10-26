@@ -1,3 +1,10 @@
+1.0.5
+
+* `codeToValue` and `resolveSchemaExpr` take a `RemoteImportMode`.
+  `dhall-to-csv` and `csv-to-dhall` accept `--no-remote`, which rejects http
+  and https imports used as code, as Text, or as Bytes, including
+  integrity-checked cache hits.
+
 1.0.4
 
 * Build against `dhall-1.42.0`
