@@ -76,6 +76,11 @@ dhall - a programmable configuration language
 **-\-no-cache**
 :   Don't use cache to resolve imports
 
+**-\-no-remote**
+:   Reject http and https imports used as code, as Text, or as Bytes, including integrity-checked cache hits. as Location, local files, and env imports are unchanged.
+
+    This is not the same as compiling with `-f-with-http`. That Cabal flag removes the HTTP client. Nixpkgs uses it so a build can still resolve hashed URL imports from a semantic cache that Nix has already filled; a cache miss fails instead of opening a connection. `--no-remote` leaves the HTTP client linked and rejects those cache hits. as Location fetches nothing under either control.
+
 **-\-explain**
 :   Explain error messages in detail
 

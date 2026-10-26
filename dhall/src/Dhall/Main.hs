@@ -46,7 +46,9 @@ import Dhall.Import
     ( Depends (..)
     , Imported (..)
     , MissingImports (..)
+    , RemoteImportMode (..)
     , SemanticCacheMode (..)
+    , _remoteImportMode
     , _semanticCacheMode
     , _importErrorMode
     , _collectedImportErrors
@@ -162,6 +164,7 @@ data Options = Options
     , plain              :: Bool
     , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
+    , remoteImportMode   :: RemoteImportMode
     , maxOutputSize      :: Maybe Int
     , maxAllocation      :: Maybe Int64
     , maxEvaluationTime  :: Maybe Int
@@ -248,6 +251,7 @@ parseOptions =
     <*> switch "plain" "Disable syntax highlighting"
     <*> parseCharacterSet
     <*> parseCensor
+    <*> parseRemoteImportMode
     <*> parseMaxOutputSize
     <*> parseMaxAllocation
     <*> parseMaxEvaluationTime
@@ -294,6 +298,16 @@ parseOptions =
       where
         f True  = Censor
         f False = NoCensor
+
+    parseRemoteImportMode =
+        fmap
+            (\noRemote ->
+                if noRemote then RejectRemoteImports else AllowRemoteImports
+            )
+            (switch
+                "no-remote"
+                "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+            )
 
     parseCharacterSet =
             Options.Applicative.flag'
@@ -752,6 +766,7 @@ command (Options {..}) = do
                     (toStatus file)
                         { _semanticCacheMode = cacheMode
                         , _importErrorMode = CollectErrors
+                        , _remoteImportMode = remoteImportMode
                         }
             dieOnImportErrors (reverse (_collectedImportErrors status))
             return (resolved, shared, status)
@@ -989,7 +1004,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _graph, _stack, _collectedImportErrors }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors }
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors, _remoteImportMode = remoteImportMode }
 
             dieOnImportErrors (reverse _collectedImportErrors)
 
@@ -1028,7 +1043,7 @@ command (Options {..}) = do
             expression <- getExpression file
 
             (Dhall.Import.Types.Status { _cache, _collectedImportErrors }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors }
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors, _remoteImportMode = remoteImportMode }
 
             dieOnImportErrors (reverse _collectedImportErrors)
 
@@ -1179,11 +1194,15 @@ command (Options {..}) = do
                     , replMaxAllocation = maxAllocation
                     , replMaxEvaluationTime = maxEvaluationTime
                     }
+                remoteImportMode
 
         Diff {..} -> do
-            expression1 <- Dhall.inputExpr expr1
+            let diffSettings =
+                    set Dhall.remoteImportMode remoteImportMode Dhall.defaultInputSettings
 
-            expression2 <- Dhall.inputExpr expr2
+            expression1 <- Dhall.inputExprWithSettings diffSettings expr1
+
+            expression2 <- Dhall.inputExprWithSettings diffSettings expr2
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
 
@@ -1207,7 +1226,18 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet censor
+            let freezeSettings =
+                    set Dhall.remoteImportMode remoteImportMode Dhall.defaultEvaluateSettings
+
+            Dhall.Freeze.freezeWithSettings
+                freezeSettings
+                outputMode
+                transitivity
+                inputs
+                scope
+                intent
+                chosenCharacterSet
+                censor
 
         Hash {..} -> do
             expression <- getExpression file

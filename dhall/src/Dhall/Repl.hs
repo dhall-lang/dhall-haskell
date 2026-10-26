@@ -64,6 +64,7 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Core                          as Dhall
     ( Expr
+    , Import
     , Var (V)
     )
 import qualified Dhall.Core                          as Expr (Expr (..))
@@ -109,8 +110,8 @@ noReplLimits =
         }
 
 -- | Implementation of the @dhall repl@ subcommand
-repl :: CharacterSet -> Bool -> ReplLimits -> IO ()
-repl characterSet explain limits =
+repl :: CharacterSet -> Bool -> ReplLimits -> Dhall.RemoteImportMode -> IO ()
+repl characterSet explain limits remoteImportMode =
     if explain then Dhall.detailed io else io
   where
     io =
@@ -125,7 +126,12 @@ repl characterSet explain limits =
             greeter
             finaliser
         )
-        (emptyEnv { characterSet, explain, replLimits = limits })
+        (emptyEnv
+            { characterSet
+            , explain
+            , replLimits = limits
+            , envRemoteImportMode = remoteImportMode
+            })
 
     banner = pure . \case
       Repline.SingleLine -> turnstile <> " "
@@ -137,13 +143,14 @@ repl characterSet explain limits =
         ASCII   -> "|-"
 
 data Env = Env
-  { envBindings      :: Dhall.Context.Context Binding
-  , envContext       :: Dhall.TypingContext Src
-  , envIt            :: Maybe Binding
-  , explain          :: Bool
-  , characterSet     :: CharacterSet
-  , outputHandle     :: Maybe System.IO.Handle
-  , replLimits       :: ReplLimits
+  { envBindings          :: Dhall.Context.Context Binding
+  , envContext           :: Dhall.TypingContext Src
+  , envIt                :: Maybe Binding
+  , explain              :: Bool
+  , characterSet         :: CharacterSet
+  , outputHandle         :: Maybe System.IO.Handle
+  , replLimits           :: ReplLimits
+  , envRemoteImportMode  :: Dhall.RemoteImportMode
   }
 
 
@@ -157,6 +164,7 @@ emptyEnv =
     , characterSet = Unicode
     , outputHandle = Just System.IO.stdout
     , replLimits = noReplLimits
+    , envRemoteImportMode = Dhall.AllowRemoteImports
     }
 
 
@@ -167,7 +175,7 @@ data Binding = Binding
 
 
 parseAndLoad
-  :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Void) 
+  :: (MonadIO m, MonadState Env m) => String -> m ( Dhall.Expr Dhall.Src Void)
 parseAndLoad src = do
   parsed <-
     case Dhall.exprFromText "(input)" (Text.pack src <> "\n") of
@@ -177,9 +185,19 @@ parseAndLoad src = do
       Right a ->
         return a
 
-  let status = Dhall.emptyStatus "."
+  loadHere parsed
 
-  liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
+-- | Resolve imports using the REPL's remote-import mode.
+loadHere
+    :: (MonadIO m, MonadState Env m)
+    => Dhall.Expr Dhall.Src Dhall.Import
+    -> m (Dhall.Expr Dhall.Src Void)
+loadHere expression = do
+    Env { envRemoteImportMode } <- get
+    let status =
+            (Dhall.emptyStatus ".")
+                { Dhall._remoteImportMode = envRemoteImportMode }
+    liftIO (State.evalStateT (Dhall.loadWith expression) status)
 
 
 eval :: ( MonadIO m, MonadState Env m ) => String -> m ()
@@ -329,15 +347,15 @@ addBinding string = do
       Just (_, unresolvedType) -> do
           let annotated = Syntax.Annot value unresolvedType
 
-          resolved <- liftIO (Dhall.load annotated)
+          resolved <- loadHere annotated
 
           _ <- typeCheck resolved
 
-          bindingType <- liftIO (Dhall.load unresolvedType)
+          bindingType <- loadHere unresolvedType
 
           return (resolved, bindingType)
       _ -> do
-          resolved <- liftIO (Dhall.load value)
+          resolved <- loadHere value
 
           bindingType <- typeCheck resolved
 
