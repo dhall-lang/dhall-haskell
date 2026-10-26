@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run every evaluation fixture that has a CLI `run.sh`, using the dhall
 # executable below. Writes a tasty-bench-shaped CSV named
-# evaluation-results-<short-hash>.csv in the current directory.
+# results-evaluation_cli-results-<short-hash>.csv in the current directory.
 #
 # Each row is a single end-to-end CLI sample (parse + resolve + typecheck +
 # normalize), so 2*Stdev is 0. These are not the Haskell phase benches.
@@ -16,7 +16,7 @@ export TIMEFORMAT="${TIME_TAG} %6R"
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
 HASH=$(git -C "${ROOT}" rev-parse --short=8 HEAD)
-OUT="${PWD}/evaluation-results-${HASH}.csv"
+OUT="${PWD}/results-evaluation_cli-${HASH}.csv"
 
 if [[ -f "${DHALL}" && -x "${DHALL}" ]]; then
     DHALL=$(cd "$(dirname "${DHALL}")" && pwd)/$(basename "${DHALL}")

@@ -35,6 +35,7 @@ Extra-Source-Files:
     benchmark/evaluation/large4/**/*.dhall
     benchmark/evaluation/large5/**/*.dhall
     benchmark/evaluation/large6/**/*.dhall
+    benchmark/evaluation/large7/**/*.dhall
     benchmark/evaluation/normalize/**/*.dhall
     benchmark/evaluation/prelude_import/**/*.dhall
     benchmark/parser/**/*.dhall

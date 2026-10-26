@@ -16,7 +16,6 @@ import qualified Dhall.JSON
 import qualified Dhall.JSON.Yaml
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck
 import qualified GHCJS.Foreign.Callback
 import qualified Prettyprinter             as Pretty
 import qualified Prettyprinter.Render.Text as Pretty
@@ -96,12 +95,18 @@ main = do
                 Left exception ->
                     errOutput exception
                 Right parsedExpression -> do
-                  eitherResolvedExpression <- Control.Exception.try (Dhall.Import.load parsedExpression)
+                  eitherResolvedExpression <-
+                      Control.Exception.try
+                          (Dhall.Import.loadRelativeToAndTypecheck
+                              "."
+                              Dhall.Import.UseSemanticCache
+                              parsedExpression
+                          )
                   case eitherResolvedExpression of
                       Left exception ->
                           errOutput (exception :: SomeException)
-                      Right resolvedExpression ->
-                          case Dhall.TypeCheck.typeOf resolvedExpression of
+                      Right (resolvedExpression, inferred) ->
+                          case inferred of
                               Left exception ->
                                   errOutput exception
                               Right inferredType -> do

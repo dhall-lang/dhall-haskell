@@ -65,6 +65,7 @@ import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
 import Lens.Micro          (set)
+import Lens.Micro.Extras   (view)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import GHC.Show            (showLitChar)
@@ -941,7 +942,13 @@ command (Options {..}) = do
             case maxEvaluationTime of
                 Nothing -> do
                     inferredType <-
-                        Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+                        Dhall.Core.throws
+                            =<< State.evalStateT
+                                (Dhall.Import.typecheckLoaded
+                                    expression
+                                    resolvedExpression
+                                )
+                                status
                     outcome <- case (maxAllocation, maxOutputSize) of
                         (Nothing, Nothing) ->
                             return
@@ -964,7 +971,12 @@ command (Options {..}) = do
                         runLimited Nothing (Just (secondsToMicros seconds)) $ do
                             inferredType <-
                                 Dhall.Core.throws
-                                    (Dhall.TypeCheck.typeOf resolvedExpression)
+                                    =<< State.evalStateT
+                                        (Dhall.Import.typecheckLoaded
+                                            expression
+                                            resolvedExpression
+                                        )
+                                        status
                             (evaluated, quoteCut) <-
                                 withAllocationLimit maxAllocation evalShared
                             produce inferredType evaluated quoteCut
@@ -1061,7 +1073,7 @@ command (Options {..}) = do
             -- normalized import.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            (resolvedExpression, _, _) <-
+            (resolvedExpression, _, status) <-
                 resolve file semanticCacheMode expression
 
             let reportAllocation = do
@@ -1078,14 +1090,30 @@ command (Options {..}) = do
                     Nothing -> do
                         inferredType <-
                             Dhall.Core.throws
-                                (Dhall.TypeCheck.typeOf resolvedExpression)
+                                =<< State.evalStateT
+                                    (Dhall.Import.typecheckLoaded
+                                        expression
+                                        resolvedExpression
+                                    )
+                                    status
                         return (inferredType, False)
-                    Just nbytes ->
-                        Dhall.Core.throws
-                            (Dhall.TypeCheck.typeWithContextBounded
-                                nbytes
-                                Dhall.TypeCheck.emptyTypingContext
-                                resolvedExpression)
+                    Just nbytes -> do
+                        checked <-
+                            State.evalStateT
+                                (Dhall.Import.typecheckWithAlreadyCheckedImports
+                                    (view Dhall.Import.startingContext status)
+                                    expression
+                                )
+                                status
+                        case checked of
+                            Just (Right inferredType) ->
+                                return (inferredType, False)
+                            _ ->
+                                Dhall.Core.throws
+                                    (Dhall.TypeCheck.typeWithContextBounded
+                                        nbytes
+                                        Dhall.TypeCheck.emptyTypingContext
+                                        resolvedExpression)
 
                 printType (inferredType, quoteCut) = case maxOutputSize of
                     Nothing ->
@@ -1195,12 +1223,19 @@ command (Options {..}) = do
                         case maybeSemantics of
                             Just importSemantics ->
                                 Dhall.Import.alphaBetaNormalForIntegrityHash
+                                    status
                                     Nothing
+                                    import_
                                     importSemantics
                             Nothing -> do
                                 _ <-
                                     Dhall.Core.throws
-                                        (Dhall.TypeCheck.typeOf resolvedExpression)
+                                        =<< State.evalStateT
+                                            (Dhall.Import.typecheckLoaded
+                                                expression
+                                                resolvedExpression
+                                            )
+                                            status
                                 return
                                     ( Dhall.Core.alphaNormalize
                                         ( Dhall.Import.normalizeLoaded
@@ -1211,7 +1246,12 @@ command (Options {..}) = do
                     Nothing -> do
                         _ <-
                             Dhall.Core.throws
-                                (Dhall.TypeCheck.typeOf resolvedExpression)
+                                =<< State.evalStateT
+                                    (Dhall.Import.typecheckLoaded
+                                        expression
+                                        resolvedExpression
+                                    )
+                                    status
                         return
                             ( Dhall.Core.alphaNormalize
                                 ( Dhall.Import.normalizeLoaded
@@ -1346,12 +1386,20 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, _) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+            _ <-
+                Dhall.Core.throws
+                    =<< State.evalStateT
+                        (Dhall.Import.typecheckLoaded
+                            (Annot expression (Dhall.Core.Text :: Expr Src Import))
+                            (Annot resolvedExpression Dhall.Core.Text)
+                        )
+                        status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
@@ -1380,12 +1428,17 @@ command (Options {..}) = do
         DirectoryTree {..} -> do
             expression <- getExpression file
 
-            (resolvedExpression, _, _) <-
+            (resolvedExpression, sharedExpression, status) <-
                 resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            _ <-
+                Dhall.Core.throws
+                    =<< State.evalStateT
+                        (Dhall.Import.typecheckLoaded expression resolvedExpression)
+                        status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 
