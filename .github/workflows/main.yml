@@ -207,3 +207,49 @@ jobs:
         with:
           name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
           path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
+
+  # GHC's JavaScript backend, which is not a Stack target. Kept out of the matrix and
+  # out of .mergify.yml so a JS compile failure does not block native packages.
+  # See nix/javascript.nix and release.nix (javascript-dhall-try).
+  dhall-try:
+    name: ubuntu-latest - dhall-try
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: "Install Nix"
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            extra-substituters = https://cache.dhall-lang.org https://dhall.cachix.org
+            extra-trusted-public-keys = cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM= dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo=
+      - name: "Cache Nix store"
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-js-${{ runner.os }}-${{ hashFiles('nix/pinnedNixpkgs.nix', 'nix/javascript.nix') }}
+          restore-prefixes-first-match: nix-js-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+          purge: true
+          purge-prefixes: nix-js-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: 0
+          purge-primary-key: never
+      - name: "Build dhall-try"
+        run: |
+          nix-build nix/javascript.nix -A dhall-try
+          # result/ is a symlink into /nix/store, which upload-artifact will not follow.
+          cp -L result/bin/dhall-try.jsexe/all.min.js "$GITHUB_WORKSPACE/dhall-try.all.min.js"
+      - name: "Upload minified interpreter"
+        uses: actions/upload-artifact@v7
+        with:
+          name: dhall-try-all.min.js
+          path: dhall-try.all.min.js
+          retention-days: 14
+          if-no-files-found: error

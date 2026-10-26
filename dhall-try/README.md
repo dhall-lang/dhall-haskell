@@ -8,7 +8,9 @@ It is compiled with **GHC's JavaScript backend** (`pkgsCross.ghcjs` on Nixpkgs
 ## Build with Nix
 
 The JS products are **not** part of a bare `nix-build` at the repo root (so a
-JS failure cannot block native tarballs).  Build them explicitly:
+JS failure cannot block native tarballs).  GitHub Actions builds `dhall-try`
+in a separate Linux job, `ubuntu-latest - dhall-try`, which is not a Mergify
+check.  Build them explicitly:
 
 ```console
 $ nix-build nix/javascript.nix -A dhall-try
