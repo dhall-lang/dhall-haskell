@@ -1,281 +1,427 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes" />
-    <style>
-      html {
-        font-family: BlinkMacSystemFont,-apple-system,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Fira Sans","Droid Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
-        -webkit-font-smoothing: antialiased;
-        background-color: #fff;
-        font-size: 16px;
-      }
-      body {
-        color: #4a4a4a;
-        margin: 8px;
-        font-size: 1em;
-        font-weight: 400;
-      }
-      header {
-        margin-bottom: 8px;
-        display: flex;
-        flex-direction: column;
-      }
-      main {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-      a {
-        color: #3273dc;
-        cursor: pointer;
-        text-decoration: none;
-      }
-      a:hover {
-        color: #000;
-      }
-      button {
-        color: #fff;
-        background-color: #3298dc;
-        border-color: transparent;
-        cursor: pointer;
-        text-align: center;
-      }
-      button:hover {
-        background-color: #2793da;
-        flex: none;
-      }
-      .spacer {
-        flex: auto;
-      }
-      .small {
-        font-size: 0.75rem;
-      }
-      footer {
-        margin-top: 16px;
-        display: flex;
-        align-items: center;
-      }
-      .header-label {
-        margin-right: 4px;
-      }
-      .benchmark-set {
-        margin: 8px 0;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-      }
-      .benchmark-title {
-        font-size: 3rem;
-        font-weight: 600;
-        word-break: break-word;
-        text-align: center;
-      }
-      .benchmark-graphs {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-        align-items: center;
-        flex-wrap: wrap;
-        width: 100%;
-      }
-      .benchmark-chart {
-        max-width: 1000px;
-      }
-    </style>
-    <title>Benchmarks</title>
-  </head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CI benchmark history</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 24px 0 48px;
+    }
+    #search-container {
+      width: 80%;
+      max-width: 960px;
+      margin: 0 auto 24px;
+    }
+    #max-commits-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+    #max-commits {
+      font-size: 15px;
+      padding: 4px 8px;
+    }
+    #search-box {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    #search-box.invalid {
+      color: red;
+    }
+    #search-error {
+      display: none;
+      margin-top: 6px;
+      color: red;
+      font-size: 14px;
+    }
+    #search-error.visible {
+      display: block;
+    }
+    #missing-data {
+      width: 80%;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .benchmark-row {
+      width: 96%;
+      margin: 0 auto 32px;
+    }
+    .plot-pair {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 24px;
+    }
+    .benchmark-plot {
+      flex: 1 1 440px;
+      max-width: 100%;
+      min-width: min(100%, 440px);
+      margin: 0;
+    }
+    .plot-title {
+      text-align: center;
+      font-size: 17px;
+      font-weight: normal;
+      margin: 0 0 4px;
+      user-select: text;
+    }
+    .plotly-chart {
+      width: 100%;
+      min-height: 450px;
+    }
+  </style>
+</head>
+<body>
+  <div id="search-container">
+    <label id="max-commits-label">
+      Max number of commits shown
+      <select id="max-commits">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="all" selected>all</option>
+      </select>
+    </label>
+    <input id="search-box" type="search" placeholder="Search by plot title (regex)">
+    <div id="search-error">Invalid regex</div>
+  </div>
+  <p id="missing-data" hidden>
+    This page reads <code>data.js</code> from the same directory. Copy it next to
+    <code>dev/bench/data.js</code> on the <code>gh-pages</code> branch and open it again.
+  </p>
+  <div id="plots"></div>
+  <script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.35.2/dist/plotly.min.js"></script>
+  <script>
+    const MEMORY_SUFFIX = ".allocated";
+    const BYTES_TO_MB = 1 / (1024 * 1024);
 
-  <body>
-    <header id="header">
-      <div class="header-item">
-        <strong class="header-label">Last Update:</strong>
-        <span id="last-update"></span>
-      </div>
-      <div class="header-item">
-        <strong class="header-label">Repository:</strong>
-        <a id="repository-link" rel="noopener"></a>
-      </div>
-    </header>
-    <main id="main"></main>
-    <footer>
-      <button id="dl-button">Download data as JSON</button>
-      <div class="spacer"></div>
-      <div class="small">Powered by <a rel="noopener" href="https://github.com/marketplace/actions/continuous-benchmark">github-action-benchmark</a></div>
-    </footer>
+    function shortHash(commitId) {
+      return commitId.slice(0, 7);
+    }
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.2/dist/Chart.min.js"></script>
-    <script src="data.js"></script>
-    <script id="main-script">
-      'use strict';
-      (function() {
-        // Colors from https://github.com/github/linguist/blob/master/lib/linguist/languages.yml
-        const toolColors = {
-          cargo: '#dea584',
-          go: '#00add8',
-          benchmarkjs: '#f1e05a',
-          benchmarkluau: '#000080',
-          pytest: '#3572a5',
-          googlecpp: '#f34b7d',
-          catch2: '#f34b7d',
-          julia: '#a270ba',
-          jmh: '#b07219',
-          benchmarkdotnet: '#178600',
-          customBiggerIsBetter: '#38ff38',
-          customSmallerIsBetter: '#ff3838',
-          _: '#333333'
-        };
-
-        function init() {
-          function collectBenchesPerTestCase(entries) {
-            const map = new Map();
-            for (const entry of entries) {
-              const {commit, date, tool, benches} = entry;
-              for (const bench of benches) {
-                const result = { commit, date, tool, bench };
-                const arr = map.get(bench.name);
-                if (arr === undefined) {
-                  map.set(bench.name, [result]);
-                } else {
-                  arr.push(result);
-                }
-              }
+    function collect(data) {
+      const commits = [];
+      const seen = new Set();
+      const series = new Map();
+      for (const [suite, runs] of Object.entries(data.entries || {})) {
+        for (const run of runs) {
+          const commit = run.commit || {};
+          if (commit.id && !seen.has(commit.id)) {
+            seen.add(commit.id);
+            commits.push(commit);
+          }
+          for (const bench of run.benches || []) {
+            if (!bench.name || !commit.id) {
+              continue;
             }
-            return map;
-          }
-
-          const data = window.BENCHMARK_DATA;
-
-          // Render header
-          document.getElementById('last-update').textContent = new Date(data.lastUpdate).toString();
-          const repoLink = document.getElementById('repository-link');
-          repoLink.href = data.repoUrl;
-          repoLink.textContent = data.repoUrl;
-
-          // Render footer
-          document.getElementById('dl-button').onclick = () => {
-            const dataUrl = 'data:,' + JSON.stringify(data, null, 2);
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = 'benchmark_data.json';
-            a.click();
-          };
-
-          // Prepare data points for charts
-          return Object.keys(data.entries).map(name => ({
-            name,
-            dataSet: collectBenchesPerTestCase(data.entries[name]),
-          }));
-        }
-
-        function renderAllChars(dataSets) {
-
-          function renderGraph(parent, name, dataset) {
-            const canvas = document.createElement('canvas');
-            canvas.className = 'benchmark-chart';
-            parent.appendChild(canvas);
-
-            const color = toolColors[dataset.length > 0 ? dataset[0].tool : '_'];
-            const data = {
-              labels: dataset.map(d => d.commit.id.slice(0, 7)),
-              datasets: [
-                {
-                  label: name,
-                  data: dataset.map(d => d.bench.value),
-                  borderColor: color,
-                  backgroundColor: color + '60', // Add alpha for #rrggbbaa
-                }
-              ],
-            };
-            const options = {
-              scales: {
-                xAxes: [
-                  {
-                    scaleLabel: {
-                      display: true,
-                      labelString: 'commit',
-                    },
-                  }
-                ],
-                yAxes: [
-                  {
-                    scaleLabel: {
-                      display: true,
-                      labelString: dataset.length > 0 ? dataset[0].bench.unit : '',
-                    },
-                    ticks: {
-                      beginAtZero: true,
-                    }
-                  }
-                ],
-              },
-              tooltips: {
-                callbacks: {
-                  afterTitle: items => {
-                    const {index} = items[0];
-                    const data = dataset[index];
-                    return '\n' + data.commit.message + '\n\n' + data.commit.timestamp + ' committed by @' + data.commit.committer.username + '\n';
-                  },
-                  label: item => {
-                    let label = item.value;
-                    const { range, unit } = dataset[item.index].bench;
-                    label += ' ' + unit;
-                    if (range) {
-                      label += ' (' + range + ')';
-                    }
-                    return label;
-                  },
-                  afterLabel: item => {
-                    const { extra } = dataset[item.index].bench;
-                    return extra ? '\n' + extra : '';
-                  }
-                }
-              },
-              onClick: (_mouseEvent, activeElems) => {
-                if (activeElems.length === 0) {
-                  return;
-                }
-                // XXX: Undocumented. How can we know the index?
-                const index = activeElems[0]._index;
-                const url = dataset[index].commit.url;
-                window.open(url, '_blank');
-              },
-            };
-
-            new Chart(canvas, {
-              type: 'line',
-              data,
-              options,
-            });
-          }
-
-          function renderBenchSet(name, benchSet, main) {
-            const setElem = document.createElement('div');
-            setElem.className = 'benchmark-set';
-            main.appendChild(setElem);
-
-            const nameElem = document.createElement('h1');
-            nameElem.className = 'benchmark-title';
-            nameElem.textContent = name;
-            setElem.appendChild(nameElem);
-
-            const graphsElem = document.createElement('div');
-            graphsElem.className = 'benchmark-graphs';
-            setElem.appendChild(graphsElem);
-
-            for (const [benchName, benches] of benchSet.entries()) {
-              renderGraph(graphsElem, benchName, benches)
+            const key = suite + "\0" + bench.name;
+            if (!series.has(key)) {
+              series.set(key, new Map());
             }
-          }
-
-          const main = document.getElementById('main');
-          for (const {name, dataSet} of dataSets) {
-            renderBenchSet(name, dataSet, main);
+            series.get(key).set(commit.id, bench);
           }
         }
+      }
+      return { commits, series };
+    }
 
-        renderAllChars(init()); // Start
-      })();
-    </script>
-  </body>
+    function baseNames(series) {
+      const names = new Set();
+      for (const key of series.keys()) {
+        const splitAt = key.indexOf("\0");
+        const suite = key.slice(0, splitAt);
+        const name = key.slice(splitAt + 1);
+        const base = name.endsWith(MEMORY_SUFFIX)
+          ? name.slice(0, -MEMORY_SUFFIX.length)
+          : name;
+        names.add(suite + "\0" + base);
+      }
+      return Array.from(names).sort();
+    }
+
+    function hoverData(commit, error, unit) {
+      const message = (commit.message || "").split("\n")[0];
+      const timestamp = commit.timestamp || "";
+      const errorText = error == null ? "" : "<br>± " + error.toPrecision(4) + " " + unit + " (2×stdev)";
+      return [message, timestamp, errorText, commit.url || ""];
+    }
+
+    function orderedCommits(commits) {
+      return commits
+        .map(function (commit, index) {
+          return { commit: commit, index: index };
+        })
+        .sort(function (left, right) {
+          const leftTime = left.commit.timestamp || "";
+          const rightTime = right.commit.timestamp || "";
+          if (leftTime && rightTime && leftTime !== rightTime) {
+            return leftTime < rightTime ? -1 : 1;
+          }
+          return left.index - right.index;
+        })
+        .map(function (item) {
+          return item.commit;
+        });
+    }
+
+    function recentCommits(commits, maxCommits) {
+      const ordered = orderedCommits(commits);
+      if (maxCommits === "all" || ordered.length <= maxCommits) {
+        return ordered;
+      }
+      return ordered.slice(ordered.length - maxCommits);
+    }
+
+    // Vertical hash labels need about this many pixels of horizontal space.
+    const TICK_PITCH_PX = 22;
+
+    function maxTicksForWidth(width) {
+      const usable = Math.max((width || 440) - 90, TICK_PITCH_PX * 2);
+      return Math.max(2, Math.floor(usable / TICK_PITCH_PX));
+    }
+
+    function visibleTickIndices(count, maxTicks) {
+      if (count <= maxTicks) {
+        return Array.from({ length: count }, function (_, index) {
+          return index;
+        });
+      }
+      const stride = Math.ceil((count - 1) / (maxTicks - 1));
+      const indices = [];
+      for (let index = 0; index < count; index += stride) {
+        indices.push(index);
+      }
+      const last = count - 1;
+      if (indices[indices.length - 1] !== last) {
+        if (last - indices[indices.length - 1] < stride) {
+          indices[indices.length - 1] = last;
+        } else {
+          indices.push(last);
+        }
+      }
+      return indices;
+    }
+
+    function tickAxis(labels, width) {
+      const indices = visibleTickIndices(labels.length, maxTicksForWidth(width));
+      return {
+        type: "linear",
+        tickmode: "array",
+        tickvals: indices,
+        ticktext: indices.map(function (index) {
+          return labels[index];
+        }),
+        tickangle: -90,
+        automargin: true,
+      };
+    }
+
+    const chartLabels = new WeakMap();
+
+    function updateVisibleTicks() {
+      document.querySelectorAll(".plotly-chart").forEach(function (chart) {
+        const labels = chartLabels.get(chart);
+        if (!labels || !chart.clientWidth) {
+          return;
+        }
+        const axis = tickAxis(labels, chart.clientWidth);
+        const key = axis.tickvals.join(",");
+        if (chart.dataset.ticks === key) {
+          return;
+        }
+        chart.dataset.ticks = key;
+        Plotly.relayout(chart, {
+          "xaxis.tickvals": axis.tickvals,
+          "xaxis.ticktext": axis.ticktext,
+        });
+      });
+    }
+
+    function plotSpec(labels, values, errors, customdata, yTitle, unit, width) {
+      const xValues = labels.map((_, index) => index);
+      const trace = {
+        type: "scatter",
+        mode: "lines+markers",
+        x: xValues,
+        y: values,
+        customdata: customdata,
+        hovertemplate:
+          "%{customdata[0]}<br>%{customdata[1]}<br>%{y:.4g} " + unit + "%{customdata[2]}<extra></extra>",
+        line: { shape: "linear" },
+        showlegend: false,
+      };
+      if (errors) {
+        trace.error_y = { type: "data", array: errors, visible: true };
+      }
+      return {
+        data: [trace],
+        layout: {
+          yaxis: { title: { text: yTitle }, rangemode: "tozero", autorange: true },
+          xaxis: tickAxis(labels, width),
+          autosize: true,
+          margin: { l: 60, r: 30, t: 20, b: 120 },
+        },
+      };
+    }
+
+    function render() {
+      const data = window.BENCHMARK_DATA;
+      if (!data || !data.entries) {
+        document.getElementById("missing-data").hidden = false;
+        return;
+      }
+      const { commits, series } = collect(data);
+      const maxCommitsValue = document.getElementById("max-commits").value;
+      const maxCommits = maxCommitsValue === "all" ? "all" : Number(maxCommitsValue);
+      const shownCommits = recentCommits(commits, maxCommits);
+      const plots = document.getElementById("plots");
+      document.querySelectorAll(".plotly-chart").forEach(function (chart) {
+        Plotly.purge(chart);
+      });
+      plots.replaceChildren();
+
+      for (const key of baseNames(series)) {
+        const splitAt = key.indexOf("\0");
+        const suite = key.slice(0, splitAt);
+        const name = key.slice(splitAt + 1);
+        const timePoints = series.get(suite + "\0" + name) || new Map();
+        const allocPoints = series.get(suite + "\0" + name + MEMORY_SUFFIX) || new Map();
+        const present = shownCommits.filter((commit) => timePoints.has(commit.id) || allocPoints.has(commit.id));
+        if (present.length === 0) {
+          continue;
+        }
+
+        const labels = [];
+        const means = [];
+        const errors = [];
+        const timeCustom = [];
+        const allocated = [];
+        const allocCustom = [];
+        let sawError = false;
+
+        for (const commit of present) {
+          labels.push(shortHash(commit.id));
+          const bench = timePoints.get(commit.id);
+          if (!bench) {
+            means.push(null);
+            errors.push(0);
+            timeCustom.push(hoverData(commit, null, "ms"));
+          } else {
+            means.push(Number(bench.value));
+            const rawRange = bench.range;
+            if (rawRange == null || String(rawRange).trim() === "") {
+              errors.push(0);
+              timeCustom.push(hoverData(commit, null, "ms"));
+            } else {
+              const error = Number(rawRange);
+              errors.push(error);
+              sawError = true;
+              timeCustom.push(hoverData(commit, error, "ms"));
+            }
+          }
+          const alloc = allocPoints.get(commit.id);
+          if (!alloc) {
+            allocated.push(null);
+            allocCustom.push(hoverData(commit, null, "MB"));
+          } else {
+            allocated.push(Number(alloc.value) * BYTES_TO_MB);
+            allocCustom.push(hoverData(commit, null, "MB"));
+          }
+        }
+
+        const title = suite + "/" + name;
+        const row = document.createElement("div");
+        row.className = "benchmark-row";
+        row.dataset.title = title;
+        const heading = document.createElement("h2");
+        heading.className = "plot-title";
+        heading.textContent = title;
+        const pair = document.createElement("div");
+        pair.className = "plot-pair";
+        row.appendChild(heading);
+        row.appendChild(pair);
+        plots.appendChild(row);
+
+        const drawn = [];
+        for (const spec of [
+          { values: means, errors: sawError ? errors : null, custom: timeCustom, yTitle: "Time (ms)", unit: "ms" },
+          { values: allocated, errors: null, custom: allocCustom, yTitle: "Allocated (MB)", unit: "MB" },
+        ]) {
+          if (spec.unit === "MB" && !allocated.some((value) => value != null)) {
+            continue;
+          }
+          const holder = document.createElement("div");
+          holder.className = "benchmark-plot";
+          const chart = document.createElement("div");
+          chart.className = "plotly-chart";
+          holder.appendChild(chart);
+          pair.appendChild(holder);
+          const plot = plotSpec(labels, spec.values, spec.errors, spec.custom, spec.yTitle, spec.unit, holder.clientWidth);
+          chartLabels.set(chart, labels);
+          chart.dataset.ticks = plot.layout.xaxis.tickvals.join(",");
+          drawn.push(
+            Plotly.newPlot(chart, plot.data, plot.layout, { responsive: true, displayModeBar: true })
+              .then(function (ready) {
+                ready.on("plotly_click", function (event) {
+                  const point = event.points && event.points[0];
+                  const url = point && point.customdata && point.customdata[3];
+                  if (url) {
+                    window.open(url, "_blank");
+                  }
+                });
+              })
+          );
+        }
+        Promise.all(drawn).then(function () {
+          requestAnimationFrame(updateVisibleTicks);
+        });
+      }
+      applySearch();
+    }
+
+    function compileSearchRegex(query) {
+      if (!query) {
+        return { regex: null, invalid: false };
+      }
+      try {
+        return { regex: new RegExp(query, "i"), invalid: false };
+      } catch (error) {
+        return { regex: null, invalid: true };
+      }
+    }
+
+    function applySearch() {
+      const box = document.getElementById("search-box");
+      const query = box.value.trim();
+      const { regex, invalid } = compileSearchRegex(query);
+      box.classList.toggle("invalid", invalid);
+      document.getElementById("search-error").classList.toggle("visible", invalid);
+      document.querySelectorAll(".benchmark-row").forEach(function (row) {
+        const title = row.dataset.title;
+        row.style.display = invalid || (regex && !regex.test(title)) ? "none" : "";
+      });
+    }
+
+    document.getElementById("search-box").addEventListener("input", applySearch);
+    document.getElementById("max-commits").addEventListener("change", render);
+
+    let resizeTimer;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(updateVisibleTicks, 150);
+    });
+
+    render();
+  </script>
+</body>
 </html>
