@@ -156,6 +156,17 @@ import qualified Data.Text.Utf16.Rope as Rope
 liftLSP :: LspT ServerConfig IO a -> HandlerM a
 liftLSP m = lift (lift m)
 
+-- | The remote-import policy from the current client configuration.
+--   Read here, rather than from the 'EvaluateSettings' captured at startup,
+--   so didChangeConfiguration is honored.
+remoteImportModeFromConfig :: HandlerM Import.RemoteImportMode
+remoteImportModeFromConfig = do
+    ServerConfig { noRemote } <- liftLSP LSP.getConfig
+    return $
+        if noRemote
+            then Import.RejectRemoteImports
+            else Import.AllowRemoteImports
+
 -- | A helper function to query haskell-lsp's VFS.
 tryReadUri :: Uri -> HandlerM (Maybe Text)
 tryReadUri uri_ = do
@@ -188,7 +199,8 @@ loadFile settings uri_ = do
     _ -> throwE (Error, "Failed to parse Dhall file.")
 
   negative <- use negativeImports
-  loaded <- liftIO $ loadCollected settings fileIdentifier expr cache negative
+  remoteImportMode <- remoteImportModeFromConfig
+  loaded <- liftIO $ loadCollected settings remoteImportMode fileIdentifier expr cache negative
   (cache', expr', errs) <- case loaded of
     Left err ->
       throwE (Error, Text.intercalate "\n" [ msg | Diagnosis _ _ msg <- diagnose err ])
@@ -246,7 +258,8 @@ tryLoadForTyping settings uri_ parsed = do
             fileIdentifier <- fileIdentifierFromUri uri_
             cache <- readImportCache
             negative <- use negativeImports
-            loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+            remoteImportMode <- remoteImportModeFromConfig
+            loaded <- liftIO $ loadCollected settings remoteImportMode fileIdentifier parsed cache negative
             case loaded of
                 Left _ ->
                     return Nothing
@@ -837,7 +850,8 @@ diagnoseDocument settings _uri txt = do
           return ([err], keptImports, keptTypes, previousText)
       Right parsed -> do
           negative <- use negativeImports
-          loaded <- liftIO $ loadCollected settings fileIdentifier parsed cache negative
+          remoteImportMode <- remoteImportModeFromConfig
+          loaded <- liftIO $ loadCollected settings remoteImportMode fileIdentifier parsed cache negative
           case loaded of
             Left err ->
               return ([], [], [err], txt)
@@ -1119,11 +1133,12 @@ executeFreezeAllImports settings request = do
     Left _ -> throwE (Warning, "Could not freeze imports; did not parse.")
 
   let importRanges = getAllImportsWithHashPositions expr
+  remoteImportMode <- remoteImportModeFromConfig
   edits_ <- forM importRanges $ \(import_, Range (x1, y1) (x2, y2)) -> do
     cache <- readImportCache
     let importExpr = Embed (stripHash import_)
 
-    hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
+    hashResult <- liftIO $ computeSemanticHash settings remoteImportMode fileIdentifier importExpr cache
     (cache', hash) <- case hashResult of
       Right (c, t) -> return (c, t)
       Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
@@ -1178,7 +1193,8 @@ executeFreezeImport settings request = do
   cache <- readImportCache
   let importExpr = Embed (stripHash import_)
 
-  hashResult <- liftIO $ computeSemanticHash settings fileIdentifier importExpr cache
+  remoteImportMode <- remoteImportModeFromConfig
+  hashResult <- liftIO $ computeSemanticHash settings remoteImportMode fileIdentifier importExpr cache
   (cache', hash) <- case hashResult of
     Right (c, t) -> return (c, t)
     Left _ -> throwE (Error, "Could not freeze import; failed to evaluate import.")
@@ -1225,8 +1241,9 @@ executeCheckImportHash settings request = do
 
   fileIdentifier <- fileIdentifierFromUri uri_
   cache <- readImportCache
+  remoteImportMode <- remoteImportModeFromConfig
   hashResult <-
-    liftIO $ computeSemanticHash settings fileIdentifier (Embed (stripHash import_)) cache
+    liftIO $ computeSemanticHash settings remoteImportMode fileIdentifier (Embed (stripHash import_)) cache
   (cache', actual) <- case hashResult of
     Right found -> return found
     Left _ -> throwE (Error, "Could not check import hash; failed to evaluate import.")
@@ -1339,8 +1356,9 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                 Just (start, targetText) -> do
                     fileIdentifier <- fileIdentifierFromUri uri_
                     cache <- readImportCache
+                    remoteImportMode <- remoteImportModeFromConfig
                     let bindersExpr = binderExprFromText (Text.take start beforeDot)
-                    loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
+                    loadedBinders <- liftIO $ load settings remoteImportMode fileIdentifier bindersExpr cache
                     case loadedBinders of
                         Left _ ->
                             return []
@@ -1349,7 +1367,7 @@ completeBeforeDot settings uri_ txt (line_, col_) = do
                                 Left _ ->
                                     return []
                                 Right targetExpr -> do
-                                    loaded <- liftIO $ load settings fileIdentifier targetExpr cache'
+                                    loaded <- liftIO $ load settings remoteImportMode fileIdentifier targetExpr cache'
                                     case loaded of
                                         Left _ ->
                                             return []
@@ -1368,6 +1386,7 @@ completionHandler settings =
         col_  = fromIntegral (request ^. params . position . character)
 
     txt <- readUri uri_
+    remoteImportMode <- remoteImportModeFromConfig
     let (completionLeadup, completionPrefix) = completionQueryAt txt (line_, col_)
 
     let computeCompletions
@@ -1388,7 +1407,7 @@ completionHandler settings =
 
             fileIdentifier <- fileIdentifierFromUri uri_
             cache <- readImportCache
-            loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
+            loadedBinders <- liftIO $ load settings remoteImportMode fileIdentifier bindersExpr cache
 
             (cache', bindersExpr') <-
               case loadedBinders of
@@ -1402,7 +1421,7 @@ completionHandler settings =
               Left _ ->
                   return []
               Right targetExpr -> do
-                loaded' <- liftIO $ load settings fileIdentifier targetExpr cache'
+                loaded' <- liftIO $ load settings remoteImportMode fileIdentifier targetExpr cache'
                 case loaded' of
                   Right (cache'', targetExpr') -> do
                     writeImportCache cache''
@@ -1415,7 +1434,7 @@ completionHandler settings =
 
             fileIdentifier <- fileIdentifierFromUri uri_
             cache <- readImportCache  -- todo save cache afterwards
-            loadedBinders <- liftIO $ load settings fileIdentifier bindersExpr cache
+            loadedBinders <- liftIO $ load settings remoteImportMode fileIdentifier bindersExpr cache
 
             bindersExpr' <-
               case loadedBinders of
@@ -1657,8 +1676,9 @@ executeShowOriginal settings request respond = do
     negative <- use negativeImports
     cache <- readImportCache
     fileIdentifier <- fileIdentifierFromUri uri_
+    remoteImportMode <- remoteImportModeFromConfig
     fetched <- liftIO $
-        loadCollected settings fileIdentifier (Core.Embed imp) cache negative
+        loadCollected settings remoteImportMode fileIdentifier (Core.Embed imp) cache negative
     let original = case fetched of
             Right (_, _, [], sources) ->
                 listToMaybe

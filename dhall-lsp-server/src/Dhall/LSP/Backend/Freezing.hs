@@ -9,6 +9,7 @@ import Control.Lens                  (universeOf, view)
 import Data.Text                     (Text)
 import Data.Void                     (Void)
 import Dhall                         (EvaluateSettings)
+import Dhall.Import                  (RemoteImportMode)
 import Dhall.Core
     ( Expr (..)
     , Import (..)
@@ -52,17 +53,18 @@ import qualified Data.Text as Text
 -- 'semantic' hash in the textual representation used to freeze Dhall imports.
 computeSemanticHash
     :: EvaluateSettings
+    -> RemoteImportMode
     -> FileIdentifier
     -> Expr Src Import
     -> Cache
     -> IO (Either DhallError (Cache, Text))
-computeSemanticHash settings fileid expr cache = do
+computeSemanticHash settings remoteImportMode fileid expr cache = do
     cachedHash <- hashCachedSingleImport settings fileid cache expr
     case cachedHash of
         Just hash ->
             return (Right (cache, hash))
         Nothing -> do
-            loaded <- load settings fileid expr cache
+            loaded <- load settings remoteImportMode fileid expr cache
             case loaded of
                 Left err ->
                     return (Left err)
