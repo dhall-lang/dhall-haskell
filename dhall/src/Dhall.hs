@@ -76,6 +76,7 @@ import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
 import Lens.Micro             (Lens', lens)
 import Lens.Micro.Extras      (view)
+import Prettyprinter          (Pretty)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
 
@@ -258,6 +259,54 @@ expectWithSettings settings Decoder{..} expression = do
 
     checkWithSettings settings expected' expression
 
+-- | 'Dhall.Import.typecheckLoaded' for a resolved expression, throwing the
+--   type error.  The parsed expression still has its imports, so each child
+--   is checked from the type stored while it was loaded.
+typecheckLoadedSettings
+    :: Expr Src Import
+    -> Expr Src Void
+    -> Status
+    -> IO ()
+typecheckLoadedSettings parsed resolved status = do
+    result <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded parsed resolved)
+            status
+    either throwM (return . const ()) result
+
+-- | Check a resolved expression against a decoder using 'typecheckLoaded'.
+--
+--   The fallback still type-checks the inlined annotation, so a reported
+--   error points at that tree.
+expectLoaded
+    :: Decoder a
+    -> Expr Src Import
+    -> Expr Src Void
+    -> Status
+    -> IO ()
+expectLoaded Decoder{..} parsed resolved status = do
+    expected' <- case expected of
+        Success x -> return x
+        Failure e -> throwM e
+
+    typecheckLoadedSettings
+        (annotateWithType parsed (fmap absurd expected'))
+        (annotateWithType resolved expected')
+        status
+
+-- | Same annotation 'checkWithSettings' builds, so the source span covers
+--   the expected type.
+annotateWithType :: Pretty a => Expr Src a -> Expr Src a -> Expr Src a
+annotateWithType expression type_ =
+    case expression of
+        Note (Src begin end bytes) _ ->
+            Note (Src begin end bytes') (Annot expression type_)
+          where
+            suffix = Dhall.Pretty.Internal.prettyToStrictText type_
+            bytes' = bytes <> " : " <> suffix
+        _ ->
+            Annot expression type_
+
 {-| Resolve an expression, using the supplied `InputSettings`
 
     Note that this also applies any substitutions specified in the
@@ -437,7 +486,7 @@ inputWithSettings settings decoder@Decoder{..} text = do
 
     (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    expectWithSettings settings decoder resolved
+    expectLoaded decoder parsed resolved status
 
     let normalized = normalizeResolved settings status shared resolved
 
@@ -514,7 +563,7 @@ inputExprWithSettings settings text = do
 
     (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    _ <- typecheckWithSettings settings resolved
+    typecheckLoadedSettings parsed resolved status
 
     pure (normalizeResolved settings status shared resolved)
 
@@ -531,7 +580,7 @@ interpretExprWithSettings
 interpretExprWithSettings settings parsed = do
     (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    typecheckWithSettings settings resolved
+    typecheckLoadedSettings parsed resolved status
 
     pure (normalizeResolved settings status shared resolved)
 
@@ -547,7 +596,7 @@ fromExprWithSettings :: InputSettings -> Decoder a -> Expr Src Import -> IO a
 fromExprWithSettings settings decoder@Decoder{..} expression = do
     (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False expression
 
-    expectWithSettings settings decoder resolved
+    expectLoaded decoder expression resolved status
 
     let normalized = normalizeResolved settings status shared resolved
 
