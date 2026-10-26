@@ -37,7 +37,22 @@ let
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
-        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+        # GHC's FP_GCC_VERSION treats `emcc` as GCC because `emcc --version`
+        # contains "gcc", then parses `emcc -v`. Emscripten 5's banner has no
+        # "version " token, so the parsed version is empty and configure
+        # errors with "Need at least gcc version 4.7". The same check is in
+        # GHC 9.6 through 9.14. Preset the autoconf cache; this Clang has the
+        # __atomic builtins the check is guarding. GccVersion is only printed
+        # afterwards. 4.7 is the minimum that passes.
+        "${compiler}" = (pkgsOld.haskell.packages."${compiler}".override (
+          pkgsNew.lib.optionalAttrs pkgsNew.stdenv.hostPlatform.isGhcjs {
+            ghc = pkgsNew.buildPackages.haskell.compiler.ghc967.overrideAttrs (old: {
+              preConfigure = (old.preConfigure or "") + ''
+                export fp_cv_gcc_version=4.7
+              '';
+            });
+          }
+        )).override (old: {
           overrides =
             pkgsNew.lib.composeExtensions
               (old.overrides or (_: _: {}))
