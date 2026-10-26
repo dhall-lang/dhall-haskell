@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # CLI timings of the normalize/* NbE fixtures (Haskell: typecheck + evaluation).
+# One cold run each: these files do not load an import graph.
 # Runnable from any directory.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 cd "${HERE}"
 DHALL="${DHALL:-dhall}"
+# shellcheck source=../cli-cache.sh
+source "${HERE}/../cli-cache.sh"
+dhall_cli_cache_begin
 
 time_dhall() {
     local file=$1

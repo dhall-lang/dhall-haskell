@@ -17,7 +17,7 @@ Prelude files under `dhall-lang/Prelude/` are unhashed copies. The upstream
 this tree. `prelude.dhall` is a small record of the functions this tree uses.
 The lude and typeclasses files are real copies, with integrity checks removed.
 
-`run.sh` times `dhall type`, a default `dhall` evaluation, and `dhall hash`.
+`run.sh` times `dhall type`, a default `dhall` evaluation, and `dhall hash`, each cold and then warm.
 The tasty benches split the same work: two of them use the inlined tree, and
 two use the shared import.
 
@@ -28,11 +28,11 @@ cd dhall && stack bench evaluation --ba '--pattern large7'
 DHALL="$(stack exec -- which dhall)" ./benchmark/evaluation/large7/run.sh
 ```
 
-`run.sh` times three commands:
+`run.sh` times each command on an empty cache and then again on that cache:
 
-- `dhall type --quiet --file big.dhall`
-- `dhall --file big.dhall`
-- `dhall hash --file big.dhall`
+- `type-cold` / `type-warm`: `dhall type --quiet --file big.dhall`
+- `default-cold` / `default-warm`: `dhall --file big.dhall`
+- `hash-cold` / `hash-warm`: `dhall hash --file big.dhall`
 
 ## Harness
 

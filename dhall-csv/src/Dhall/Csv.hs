@@ -248,11 +248,11 @@ codeToValue mFilePath code = do
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    (resolvedExpression, inferred) <-
-        Dhall.Import.loadRelativeToAndTypecheck rootDirectory UseSemanticCache parsedExpression
+    (normalizedExpression, inferred) <-
+        Dhall.Import.loadRelativeToTypecheckAndNormalize rootDirectory UseSemanticCache parsedExpression
 
     _ <- Core.throws inferred
 
-    case dhallToCsv resolvedExpression of
+    case dhallToCsv normalizedExpression of
         Left err -> throwIO err
         Right csv -> return $ Data.Foldable.toList csv

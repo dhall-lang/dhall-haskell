@@ -22,28 +22,78 @@ Pattern matching is infix (tasty default): `--pattern slow_walk` matches
 
 ## CLI timings (`run.sh`)
 
-Each fixture directory has a `run.sh` that times a plain `dhall --file …`
-(or, for `k8s/`, `dhall` on the `.mkPod` expression). Scripts locate their
-own directory, so they can be run from the repository root. Set `DHALL` to
-override the executable (default: `dhall` on `PATH`). This is a full CLI
-evaluate (parse + resolve + typecheck + normalize), not a Mode A phase split.
+Each fixture directory has a `run.sh` that times a plain `dhall` command.
+Scripts locate their own directory, so they can be run from the repository
+root. Set `DHALL` to override the executable (default: `dhall` on `PATH`).
+This is a full CLI evaluate (parse + resolve + typecheck + normalize), not a
+Mode A phase split.
 
 ```sh
 ./dhall/benchmark/evaluation/large5/run.sh
 DHALL=/path/to/dhall ./dhall/benchmark/evaluation/k8s/run.sh
 ```
 
-To run every `run.sh` and write `evaluation-results-<short-hash>.csv` (one
-end-to-end sample per CLI invocation):
+To run every `run.sh` and write `results-evaluation_cli-<short-hash>.csv`:
 
 ```sh
 # Edit DHALL at the top of the script, or override it:
 DHALL=/path/to/dhall ./run_cli_evaluation_benchmarks.sh
 ```
 
-`substitutions/run.sh` times the nested-let pipelines and a temp-generated
-many-files tree. It still cannot inject Haskell
-`InputSettings` substitutions; use the tasty-bench group for that.
+The CSV has one sample per command, so `2*Stdev (ps)` is 0. The text before
+the colon in a `run.sh` header is the row name. A header such as
+`file3-cold: …` from `k8s/run.sh` becomes `k8s.file3-cold`.
+
+### Cache
+
+No script reads or writes `~/.cache/dhall`. Each `run.sh` creates a temporary
+`XDG_CACHE_HOME` and deletes it on exit, including when a command fails.
+`run_cli_evaluation_benchmarks.sh` does the same for a suite directory; each
+`run.sh` then replaces that directory with its own, so one fixture cannot
+warm the next.
+
+`*-cold` empties that directory and then runs the command. The run fills the
+semantic cache (`dhall/`) and the semisemantic cache (`dhall-haskell-v2/`).
+`*-warm` runs the same command again without emptying the directory. The next
+command starts by emptying it, so `file4-cold` is not warmed by `file3`.
+
+`normalize` and `large2` are timed once, on an empty cache. Those files do
+not load an import graph, so a second run would not measure a different
+cache. Their row names have no `-cold` suffix.
+
+### Rows
+
+| CSV name | Command | Cache |
+|---|---|---|
+| `diamond_import.main-cold` / `-warm` | `dhall --file main.dhall` | empty, then same cache |
+| `diamond_import_transitive.main-cold` / `-warm` | `dhall --file main.dhall` | empty, then same cache |
+| `k8s.file3-cold` / `-warm` | `(./file3.dhall).mkPod` on stdin | empty, then same cache |
+| `k8s.file4-cold` / `-warm` | `(./file4.dhall).mkPod` on stdin | empty, then same cache |
+| `large1.main-cold` / `-warm` | `dhall --file main.dhall` | empty, then same cache |
+| `large2.main.dhall` | `dhall --file main.dhall` | empty; one run |
+| `large3.pipeline-cold` / `-warm` | `dhall --file pipeline.dhall` | empty, then same cache |
+| `large3.get_config-cold` / `-warm` | `dhall --file get_config.dhall` | empty, then same cache |
+| `large4.generate-example-cold` / `-warm` | `dhall --file generate-example.dhall` | empty, then same cache |
+| `large5.pipeline-code-cold` / `-warm` | `dhall --file pipeline-code.dhall` | empty, then same cache |
+| `large6.pipeline-code-long-<variant>-cold` / `-warm` | `dhall --file pipeline-code-long-<variant>.dhall` | empty, then same cache |
+| `large7.type-cold` / `-warm` | `dhall type --quiet --file big.dhall` | empty, then same cache |
+| `large7.default-cold` / `-warm` | `dhall --file big.dhall` | empty, then same cache |
+| `large7.hash-cold` / `-warm` | `dhall hash --file big.dhall` | empty, then same cache |
+| `normalize.<file>` | `dhall --file <file>` | empty; one run |
+| `prelude_import.prelude-code-cold` / `-warm` | `dhall --file prelude-code.dhall` | empty, then same cache |
+| `substitutions.as_code-cold` / `-warm` | `dhall --file pipeline-code.dhall` | empty, then same cache |
+| `substitutions.many_files.as_code-cold` / `-warm` | generated 200-file tree | empty, then same cache |
+
+`<variant>` is `parse`, `eval`, `typecheck`, `normalize`, `multi`, or `walk`.
+`<file>` is one of `ChurchEval.dhall`, `FunCompose.dhall`, `Iterate.dhall`,
+`IterateAlt.dhall`, `IterateAlt2.dhall`, `ListBench.dhall`,
+`ListBenchAlt.dhall`, or `NaturalFoldShortcut.dhall`.
+
+`large6/run.sh` regenerates `slow/parse.dhall` before timing.
+`substitutions/run.sh` generates the many-files tree into a temporary
+directory and deletes it on exit. That script still cannot inject Haskell
+`InputSettings` substitutions; use the tasty-bench group for that. The
+`large7` `small.dhall` commands are present in `run.sh` but commented out.
 
 ## Measurement modes
 

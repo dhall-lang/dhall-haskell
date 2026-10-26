@@ -23,7 +23,6 @@ import qualified Dhall
 import qualified Dhall.Bash
 import qualified Dhall.Import
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import qualified Paths_dhall_bash
 import qualified System.Exit
@@ -82,8 +81,9 @@ main = do
             Left  err  -> Control.Exception.throwIO err
             Right expr -> return expr
 
-        expr' <- Dhall.Import.load expr
-        case Dhall.TypeCheck.typeOf expr' of
+        (expr', inferred) <-
+            Dhall.Import.loadRelativeToAndTypecheck "." Dhall.Import.UseSemanticCache expr
+        case inferred of
             Left  err -> Control.Exception.throwIO err
             Right _   -> return ()
 

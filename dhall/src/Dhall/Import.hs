@@ -155,6 +155,7 @@ module Dhall.Import (
     , typecheckWithAlreadyCheckedImports
     , typecheckLoaded
     , loadRelativeToAndTypecheck
+    , loadRelativeToTypecheckAndNormalize
     , reportWarning
     , chainImport
     , dependencyToFile
@@ -2770,6 +2771,28 @@ loadRelativeToAndTypecheck parentDirectory mode expression = do
     inferred <-
         State.evalStateT (typecheckLoaded expression resolved) status'
     pure (resolved, inferred)
+
+-- | 'loadRelativeToAndTypecheck', then the normal form of the shared twin.
+--
+--   Callers have no custom normalizer.  The inlined expression is not
+--   normalized.
+loadRelativeToTypecheckAndNormalize
+    :: FilePath
+    -> SemanticCacheMode
+    -> Expr Src Import
+    -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
+loadRelativeToTypecheckAndNormalize parentDirectory mode expression = do
+    let status =
+            makeEmptyStatus defaultNewManager defaultOriginHeaders parentDirectory
+    ((resolved, shared), status') <-
+        State.runStateT
+            (loadWithShared expression)
+            status { _semanticCacheMode = mode }
+    inferred <-
+        State.evalStateT (typecheckLoaded expression resolved) status'
+    normalized <-
+        Exception.evaluate (normalizeLoaded status' shared :: Expr Src Void)
+    pure (normalized, inferred)
 
 -- | See 'loadRelativeTo'.
 loadWithStatus

@@ -5,7 +5,7 @@ module Dhall.LSP.Backend.Freezing (
   stripHash
 ) where
 
-import Control.Lens                  (universeOf)
+import Control.Lens                  (universeOf, view)
 import Data.Text                     (Text)
 import Data.Void                     (Void)
 import Dhall                         (EvaluateSettings)
@@ -20,14 +20,20 @@ import Dhall.LSP.Backend.Dhall
     , DhallError
     , FileIdentifier
     , asWellTyped
+    , cachedSemantics
     , emptyCache
     , hashNormalToCode
+    , identifierChained
     , load
     , lookupCachedImport
     , normalize
+    , sharedStatus
     )
 
-import qualified Dhall.Core as Core
+import qualified Dhall
+import qualified Dhall.Core   as Core
+import qualified Dhall.Import as Import
+import qualified Dhall.Map    as Map
 import Dhall.LSP.Backend.Diagnostics
     ( Range (..)
     , positionFromMegaparsec
@@ -50,8 +56,9 @@ computeSemanticHash
     -> Expr Src Import
     -> Cache
     -> IO (Either DhallError (Cache, Text))
-computeSemanticHash settings fileid expr cache =
-    case hashCachedSingleImport settings fileid cache expr of
+computeSemanticHash settings fileid expr cache = do
+    cachedHash <- hashCachedSingleImport settings fileid cache expr
+    case cachedHash of
         Just hash ->
             return (Right (cache, hash))
         Nothing -> do
@@ -72,11 +79,37 @@ hashCachedSingleImport
     -> FileIdentifier
     -> Cache
     -> Expr Src Import
-    -> Maybe Text
+    -> IO (Maybe Text)
 hashCachedSingleImport settings fileid cache expr =
-    singleCodeImport expr >>= \ imp ->
-        lookupCachedImport fileid cache imp >>= \ (_, sem) ->
-            Just (hashVoidSemantics settings sem)
+    case singleCodeImport expr of
+        Nothing ->
+            return Nothing
+        Just imp ->
+            case lookupCachedImport fileid cache imp of
+                Nothing ->
+                    return Nothing
+                Just (_, sem) ->
+                    case sharedStatus cache of
+                        Nothing ->
+                            return (Just (hashVoidSemantics settings sem))
+                        Just status ->
+                            hashShared status imp sem
+  where
+    hashShared status imp sem =
+        let chained =
+                Import.Chained
+                    (Import.chainedImport (identifierChained fileid) <> imp)
+        in case Map.lookup chained (cachedSemantics cache) of
+            Nothing ->
+                return (Just (hashVoidSemantics settings sem))
+            Just semantics -> do
+                normal <-
+                    Import.alphaBetaNormalForIntegrityHash
+                        status
+                        (view Dhall.normalizer settings)
+                        imp
+                        semantics
+                return (Just (Import.hashExpressionToCode normal))
 
 hashVoidSemantics :: EvaluateSettings -> Expr Void Void -> Text
 hashVoidSemantics settings sem =

@@ -12,6 +12,7 @@ module Dhall.LSP.Backend.Dhall (
   Cache,
   cachedImportTypes,
   cachedSemantics,
+  sharedStatus,
   emptyCache,
   invalidate,
   lookupCachedImport,
@@ -127,6 +128,10 @@ data Cache =
 
 cachedSemantics :: Cache -> Dhall.Map.Map Import.Chained Import.ImportSemantics
 cachedSemantics Cache { cacheSemantics = sem } = sem
+
+-- | Status from the last load that kept a shared twin.
+sharedStatus :: Cache -> Maybe Import.Status
+sharedStatus Cache { cacheEval = twin } = fmap fst twin
 
 cachedImportTypes :: Cache -> Dhall.Map.Map Import.Chained (Expr Src Void)
 cachedImportTypes Cache { cacheImportTypes = types } = types

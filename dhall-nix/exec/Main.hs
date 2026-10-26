@@ -18,7 +18,6 @@ import qualified Dhall
 import qualified Dhall.Import
 import qualified Dhall.Nix
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
 import Nix.Pretty ()
 import qualified Options.Generic
@@ -48,8 +47,9 @@ main = handle (Dhall.detailed (do
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 
-    expr' <- Dhall.Import.load expr
-    case Dhall.TypeCheck.typeOf expr' of
+    (expr', inferred) <-
+        Dhall.Import.loadRelativeToAndTypecheck "." Dhall.Import.UseSemanticCache expr
+    case inferred of
         Left  err -> Control.Exception.throwIO err
         Right _   -> return ()
 

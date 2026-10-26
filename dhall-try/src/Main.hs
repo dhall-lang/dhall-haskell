@@ -95,9 +95,14 @@ main = do
                 Left exception ->
                     errOutput exception
                 Right parsedExpression -> do
+                  mode <- Data.IORef.readIORef modeRef
+                  let load = case mode of
+                          Dhall -> Dhall.Import.loadRelativeToTypecheckAndNormalize
+                          Hash  -> Dhall.Import.loadRelativeToTypecheckAndNormalize
+                          _     -> Dhall.Import.loadRelativeToAndTypecheck
                   eitherResolvedExpression <-
                       Control.Exception.try
-                          (Dhall.Import.loadRelativeToAndTypecheck
+                          (load
                               "."
                               Dhall.Import.UseSemanticCache
                               parsedExpression
@@ -110,13 +115,10 @@ main = do
                               Left exception ->
                                   errOutput exception
                               Right inferredType -> do
-                                  mode <- Data.IORef.readIORef modeRef
                                   case mode of
                                       Dhall -> do
-                                          let normalizedExpression =
-                                                  Dhall.Core.normalize resolvedExpression
                                           let dhallText =
-                                                  prettyExpression normalizedExpression
+                                                  prettyExpression resolvedExpression
                                           setOutput dhallText
 
                                       Type -> do
@@ -149,7 +151,7 @@ main = do
                                                           setOutput yamlText
 
                                       Hash ->
-                                          setOutput (Dhall.Import.hashExpressionToCode (Dhall.Core.alphaNormalize (Dhall.Core.normalize resolvedExpression)))
+                                          setOutput (Dhall.Import.hashExpressionToCode (Dhall.Core.alphaNormalize resolvedExpression))
 
     interpret
 
