@@ -183,9 +183,16 @@ $ nix-build
 The Nix expressions pin [Nixpkgs 26.05](https://github.com/NixOS/nixpkgs/tree/nixos-26.05)
 and build with GHC 9.6 by default (`./nix/pinnedNixpkgs.nix`).  GitHub Actions
 still uses Stack for the compiler matrix; Hydra / `nix-build` is the Nix path.
-The in-browser interpreter (`dhall-try`) is not part of this Nix build: Nixpkgs
-25.11 removed legacy GHCJS 8.10.  See `dhall-try/README.md` for the JavaScript
-backend.
+
+The in-browser interpreter (`dhall-try`) is a separate Nix product, compiled
+with GHC's JavaScript backend.  It is **not** built by a bare `nix-build`:
+
+```console
+$ nix-build nix/javascript.nix -A dhall-try
+```
+
+See [`dhall-try/README.md`](./dhall-try/README.md) for artifact paths, Cabal
+flags, and why `compiler = "ghcjs"` is no longer valid on this pin.
 
 ... or you can run `nix-build` within each package's respective directory to
 build just that one package.
@@ -257,43 +264,26 @@ This generates a `dhall-to-json.prof` file in your current directory.
 
 ## Build the website
 
-If you don't need to change the GHCJS code, then switch to the `dhall-lang`
-repository and follow these instructions instead:
+If you don't need to change the in-browser interpreter, switch to the
+`dhall-lang` repository and follow:
 
 * [`dhall-lang` - Build the website](https://github.com/dhall-lang/dhall-lang/blob/master/nixops/README.md#updating-dhall-langorg)
 
-If you do need to test changes to the GHCJS code (i.e. the
-[`./dhall-try`](./dhall-try) subdirectory) then stay within this repository, but
-edit the `dhall/dhall-lang` submodule to make the following change:
+If you do need to test changes under [`./dhall-try`](./dhall-try), build the
+JavaScript interpreter from this repository:
 
-```diff
-diff --git a/release.nix b/release.nix
---- a/dhall/dhall-lang/release.nix
-+++ b/dhall/dhall-lang/release.nix
-       let
-         json = builtins.fromJSON (builtins.readFile ./nixops/dhall-haskell.json);
- 
--        dhall-haskell =
--          pkgs.fetchFromGitHub {
--            owner = "dhall-lang";
--
--            repo = "dhall-haskell";
--
--            inherit (json) rev sha256 fetchSubmodules;
--          };
-+        dhall-haskell = ../..;
- 
-       in
-         import "${dhall-haskell}/default.nix";
+```console
+$ nix-build nix/javascript.nix -A dhall-try
 ```
 
-... and then build the website by running:
+That uses `pkgsCross.ghcjs` (GHC's JS backend on Nixpkgs 26.05), not legacy
+GHCJS.  The file to drop into the website is
+`result/bin/dhall-try.jsexe/all.min.js`.  Details are in
+[`dhall-try/README.md`](./dhall-try/README.md).
 
-```bash
-$ nix build --file dhall/dhall-lang/release.nix website
-```
-
-... which will incorporate any GHCJS-related changes you make
+Until the `dhall-lang` overlay stops pinning `dhall-haskell-old.json`,
+dhall-lang.org will keep serving the August 2021 interpreter even after this
+package builds.
 
 ## Contributing
 

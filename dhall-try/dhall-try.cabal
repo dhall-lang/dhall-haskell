@@ -1,7 +1,6 @@
 name:                dhall-try
 version:             1.0.0
 synopsis:            Try Dhall in a browser
--- description:
 homepage:            https://github.com/dhall-lang/dhall-haskell
 license:             BSD3
 license-file:        LICENSE
@@ -14,14 +13,13 @@ cabal-version:       >=1.10
 
 executable dhall-try
   main-is:             Main.hs
+  other-modules:       Callback
   build-depends:       base           >= 4.11.0.0 && < 5
                      , aeson-pretty
                      , dhall
                      , dhall-json
                      , prettyprinter  >= 1.7.0
                      , text
-                     , ghcjs-base
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options: -Wall -dedupe
-  cpp-options: -DGHCJS_BROWSER
+  ghc-options: -Wall

@@ -1,6 +1,6 @@
 # GitHub Actions
 
-- [`main.yml`](main.yml) — build and test matrix on pull requests
+- [`main.yml`](main.yml) — build and test matrix on pull requests, plus a separate Linux job that builds `dhall-try` with Nix (`ubuntu-latest - dhall-try`). That job is not a Mergify check.
 - [`renovatebot.yml`](renovatebot.yml) — scheduled Renovate
 - [`bench.yml`](bench.yml) — `dhall` package benchmarks (below)
 
