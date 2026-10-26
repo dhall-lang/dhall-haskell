@@ -26,9 +26,11 @@ permissions:
   contents: write
   deployments: write
 
+# Keep a run that has already started. A later push to main queues another
+# run instead of cancelling the one that is writing this commit's results.
 concurrency:
   group: benchmarks-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   benchmark:

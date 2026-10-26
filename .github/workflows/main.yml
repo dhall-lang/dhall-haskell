@@ -3,7 +3,15 @@ env:
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
-on: [pull_request]
+# pull_request caches live on the merge ref and are invisible to other PRs.
+# The benchmarks workflow only warms the Ubuntu stack.yaml cache on main, so
+# macOS and Windows (and the other GHC jobs) start cold on every new PR unless
+# a push to main writes those caches into the default-branch scope.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 jobs:
   build:
     strategy:
