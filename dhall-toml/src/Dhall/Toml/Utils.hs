@@ -17,7 +17,6 @@ import qualified Data.Text.IO    as Text.IO
 import qualified Dhall.Core      as Core
 import qualified Dhall.Import
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
 import qualified System.FilePath as FilePath
 
 -- | Read the file fileName and return the normalized Dhall AST
@@ -42,10 +41,10 @@ textToDhall fileName text = do
 
     let directory = FilePath.takeDirectory fileName
 
-    resolvedExpression <- do
-        Dhall.Import.loadRelativeTo directory UseSemanticCache parsedExpression
+    (resolvedExpression, inferred) <-
+        Dhall.Import.loadRelativeToAndTypecheck directory UseSemanticCache parsedExpression
 
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    _ <- Core.throws inferred
 
     return resolvedExpression
 

@@ -20,6 +20,7 @@ import Dhall.LSP.Backend.Dhall
     , DhallError
     , FileIdentifier
     , asWellTyped
+    , emptyCache
     , hashNormalToCode
     , load
     , lookupCachedImport
@@ -62,7 +63,7 @@ computeSemanticHash settings fileid expr cache =
                     return
                         (Right
                             ( cache'
-                            , hashNormalToCode (normalize settings (asWellTyped expr'))
+                            , hashNormalToCode (normalize settings cache' (asWellTyped expr'))
                             ))
 
 -- | When the file is only a code import, reuse cached import semantics.
@@ -79,7 +80,7 @@ hashCachedSingleImport settings fileid cache expr =
 
 hashVoidSemantics :: EvaluateSettings -> Expr Void Void -> Text
 hashVoidSemantics settings sem =
-    hashNormalToCode (normalize settings (asWellTyped (Core.renote sem)))
+    hashNormalToCode (normalize settings emptyCache (asWellTyped (Core.renote sem)))
 
 stripHash :: Import -> Import
 stripHash (Import (ImportHashed _ importType) mode) =

@@ -226,6 +226,11 @@ data Status = Status
     , _placeholderCount :: !Int
     -- ^ Next 'ImportHole' index.
 
+    , _embeddedHoleCount :: !Int
+    -- ^ How many holes have been placed into a resolved expression.  A file
+    --   compares this before and after resolving its imports, instead of
+    --   walking the inlined tree to look for a hole.
+
     , _importHoles :: Map Chained ImportHole
     -- ^ Imports that failed and were replaced by a hole.  They are not values
     --   in '_cache'.
@@ -341,6 +346,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
     _collectedImportErrors = []
 
     _placeholderCount = 0
+
+    _embeddedHoleCount = 0
 
     _importHoles = Map.empty
 

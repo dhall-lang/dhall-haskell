@@ -243,7 +243,6 @@ import qualified Dhall.JSON.Compat         as JSON.Compat
 import qualified Dhall.Map
 import qualified Dhall.Parser
 import qualified Dhall.Pretty
-import qualified Dhall.TypeCheck
 import qualified Dhall.Util
 import qualified Lens.Micro                as Lens
 import qualified Options.Applicative
@@ -1229,9 +1228,10 @@ codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    resolvedExpression <- Dhall.Import.loadRelativeTo rootDirectory UseSemanticCache parsedExpression
+    (resolvedExpression, inferred) <-
+        Dhall.Import.loadRelativeToAndTypecheck rootDirectory UseSemanticCache parsedExpression
 
-    _ <- Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+    _ <- Core.throws inferred
 
     let convertedExpression =
             convertToHomogeneousMaps conversion resolvedExpression

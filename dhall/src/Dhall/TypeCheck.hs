@@ -14,6 +14,7 @@ module Dhall.TypeCheck (
       typeWith
     , typeOf
     , typeWithA
+    , typeWithImports
     , TypingContext
     , emptyTypingContext
     , extendLet
@@ -152,6 +153,48 @@ typeWithA tpa context expression =
     fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer tpa ctx expression)
   where
     ctx = contextToCtx context
+
+-- | 'typeWithA' where each 'Embed' also has a value.
+--
+--   @semantics@ is import-free.  The values are evaluated lazily in the
+--   typing environment, once per embedded key, and only if conversion or a
+--   @let@ forces them.  Quoting matches 'typeWith': free variables that come
+--   from the context stay references.
+typeWithImports
+    :: (Eq a, Ord a, Pretty a)
+    => Typer a
+    -> Data.Map.Map a (Expr Void a)
+    -> Context (Expr s a)
+    -> Expr s a
+    -> Either (TypeError s a) (Expr s a)
+typeWithImports typer semantics context expression =
+    fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer typer ctx expression)
+  where
+    Ctx baseValues types = contextToCtx context
+
+    env = install baseValues
+
+    install Empty =
+        Imports resolve
+    install (Skip rest name) =
+        Skip (install rest) name
+    install (Extend rest name value) =
+        Extend (install rest) name value
+    install (Imports _) =
+        Imports resolve
+
+    ctx = Ctx env types
+
+    -- Lazy in the value, so an unused import is not evaluated.
+    importValues =
+        Data.Map.map (\expr -> Eval.eval env expr) semantics
+
+    resolve key =
+        case Data.Map.lookup key importValues of
+            Just value ->
+                value
+            Nothing ->
+                VEmbed key
 
 -- | A typing environment that stores each binding's type and, when the
 --   binding is a @let@, its value.
