@@ -207,11 +207,30 @@ freezeImportWithSettings settings directory import_ = do
     let customNormalizer = view Dhall.normalizer settings
 
     (expression, status') <-
-        State.runStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
-
-    case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) expression of
-        Left  exception -> Exception.throwIO exception
-        Right _         -> return ()
+        case customNormalizer of
+            Nothing -> do
+                ((loaded, _shared), status') <-
+                    State.runStateT
+                        (Dhall.Import.loadWithShared (Embed unprotectedImport))
+                        status
+                inferred <-
+                    State.evalStateT
+                        (Dhall.Import.typecheckLoaded
+                            (Embed unprotectedImport)
+                            loaded
+                        )
+                        status'
+                case inferred of
+                    Left exception -> Exception.throwIO exception
+                    Right _ -> return (loaded, status')
+            Just _ -> do
+                (loaded, status') <-
+                    State.runStateT
+                        (Dhall.Import.loadWith (Embed unprotectedImport))
+                        status
+                case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) loaded of
+                    Left exception -> Exception.throwIO exception
+                    Right _ -> return (loaded, status')
 
     maybeSemantics <-
         Dhall.Import.lookupCachedImportSemantics status' unprotectedImport
