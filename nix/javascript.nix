@@ -50,6 +50,39 @@ let
               preConfigure = (old.preConfigure or "") + ''
                 export fp_cv_gcc_version=4.7
               '';
+              # The source configure skips FP_FIND_CXX_STD_LIB when TargetOS is
+              # ghcjs. installPhase reconfigures the bindist, and that script
+              # (distrib/configure.ac.in) runs the probe anyway. em++ then
+              # treats libc++.so as an input file and configure aborts with
+              # "Failed to find C++ standard library".
+              postPatch = (old.postPatch or "") + ''
+                patched=0
+                # The 9.6.7 tarball ships only distrib/configure.ac.in. Configure
+                # fills in @variables@ to produce distrib/configure.ac, and
+                # hadrian runs autoreconf on that to make the bindist script.
+                for f in distrib/configure.ac distrib/configure.ac.in; do
+                  if [ -f "$f" ]; then
+                    # Keep $TargetOS literal. substituteInPlace would expand it.
+                    awk '
+                      $0 == "FP_FIND_CXX_STD_LIB" {
+                        print "if test \"$TargetOS\" != \"ghcjs\"; then"
+                        print
+                        print "fi"
+                        found = 1
+                        next
+                      }
+                      { print }
+                      END { if (!found) exit 1 }
+                    ' "$f" > "$f.patched"
+                    mv "$f.patched" "$f"
+                    patched=1
+                  fi
+                done
+                if [ "$patched" -ne 1 ]; then
+                  echo "distrib/configure.ac(.in) not found" >&2
+                  exit 1
+                fi
+              '';
             });
           }
         )).override (old: {
