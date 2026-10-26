@@ -129,6 +129,8 @@ module Dhall.Import (
     , ImportRef (..)
     , ImportHole (..)
     , SemanticCacheMode(..)
+    , RemoteImportMode(..)
+    , remoteImportMode
     , Chained (..)
     , chainedFromLocalHere
     , chainedChangeMode
@@ -172,6 +174,7 @@ module Dhall.Import (
     , Imported(..)
     , ImportResolutionDisabled(..)
     , PrettyHttpException(..)
+    , RemoteImportsDisabled(..)
     , MissingFile(..)
     , MissingEnvironmentVariable(..)
     , MissingImports(..)
@@ -572,6 +575,25 @@ instance Show CannotImportHTTPURL where
         <>  url
         <>  "\n"
 
+-- | Exception thrown when a URL import would fetch and remote imports are disabled.
+data RemoteImportsDisabled = RemoteImportsDisabled String
+    deriving (Typeable)
+
+instance Exception RemoteImportsDisabled
+
+instance Show RemoteImportsDisabled where
+    show (RemoteImportsDisabled url) =
+            "\n"
+        <>  "\ESC[1;31mError\ESC[0m: Remote imports are disabled.\n"
+        <>  "\n"
+        <>  "The requested URL was: "
+        <>  url
+        <>  "\n"
+        <>  "\n"
+        <>  "This import was rejected by --no-remote.\n"
+        <>  "Hashed URL imports are rejected too, including semantic-cache hits.\n"
+        <>  "as Location, local files, and env imports are still allowed.\n"
+
 {-|
 > canonicalize . canonicalize = canonicalize
 
@@ -695,14 +717,42 @@ chainedChangeMode mode (Chained (Import importHashed _)) =
     Chained (Import importHashed mode)
 
 -- | Chain imports, also typecheck and normalize headers if applicable.
+--
+--   A URL import that would fetch is rejected here, before headers are
+--   normalized and before either cache is consulted.
 chainImport :: Chained -> Import -> StateT Status IO Chained
 chainImport (Chained parent) child@(Import importHashed@(ImportHashed _ (Remote url)) _) = do
+    rejectRemoteImport (canonicalize (parent <> child))
     url' <- normalizeHeadersIn url
     let child' = child { importHashed = importHashed { importType = Remote url' } }
     return (Chained (canonicalize (parent <> child')))
 
-chainImport (Chained parent) child =
-    return (Chained (canonicalize (parent <> child)))
+chainImport (Chained parent) child = do
+    let chained = canonicalize (parent <> child)
+    rejectRemoteImport chained
+    return (Chained chained)
+
+-- | Fail a URL import that would fetch when 'RejectRemoteImports' is set.
+--
+--   @as Location@ does not fetch.  A relative import chained onto a remote
+--   parent is remote, and is rejected unless its mode is 'Location'.
+rejectRemoteImport :: Import -> StateT Status IO ()
+rejectRemoteImport (Import (ImportHashed _ (Remote url)) mode)
+    | mode /= Location = do
+        Status { _remoteImportMode, _stack } <- State.get
+        case _remoteImportMode of
+            AllowRemoteImports ->
+                return ()
+            RejectRemoteImports ->
+                throwMissingImport
+                    (Imported
+                        _stack
+                        (RemoteImportsDisabled
+                            (Text.unpack (Core.pretty (url { headers = Nothing })))
+                        )
+                    )
+rejectRemoteImport _ =
+    return ()
 
 -- | Load an import, resulting in a fully resolved, type-checked expression.
 --   Unhashed Code imports may still be unnormalized ('TypecheckedOnly');

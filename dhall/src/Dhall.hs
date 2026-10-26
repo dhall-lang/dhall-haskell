@@ -34,6 +34,7 @@ module Dhall
     , substitutions
     , normalizer
     , newManager
+    , remoteImportMode
     , reportWarning
     , defaultInputSettings
     , InputSettings
@@ -132,11 +133,12 @@ sourceName = lens _sourceName (\s x -> s { _sourceName = x})
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
-  { _substitutions   :: Dhall.Substitution.Substitutions Src Void
-  , _startingContext :: Dhall.Context.Context (Expr Src Void)
-  , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
-  , _newManager      :: IO Dhall.Import.Manager
-  , _reportWarning   :: Text -> IO ()
+  { _substitutions     :: Dhall.Substitution.Substitutions Src Void
+  , _startingContext   :: Dhall.Context.Context (Expr Src Void)
+  , _normalizer        :: Maybe (Core.ReifiedNormalizer Void)
+  , _newManager        :: IO Dhall.Import.Manager
+  , _remoteImportMode  :: Dhall.Import.RemoteImportMode
+  , _reportWarning     :: Text -> IO ()
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -145,11 +147,12 @@ data EvaluateSettings = EvaluateSettings
 -- @since 1.16
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
-  { _substitutions   = Dhall.Substitution.empty
-  , _startingContext = Dhall.Context.empty
-  , _normalizer      = Nothing
-  , _newManager      = Dhall.Import.defaultNewManager
-  , _reportWarning   = Dhall.Util.printWarning
+  { _substitutions    = Dhall.Substitution.empty
+  , _startingContext  = Dhall.Context.empty
+  , _normalizer       = Nothing
+  , _newManager       = Dhall.Import.defaultNewManager
+  , _remoteImportMode = Dhall.Import.AllowRemoteImports
+  , _reportWarning    = Dhall.Util.printWarning
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -191,6 +194,16 @@ newManager
 newManager =
     evaluateSettings
         . lens _newManager (\s x -> s { _newManager = x })
+
+-- | Whether URL imports that fetch are rejected.  See
+--   'Dhall.Import.RemoteImportMode'.  The default is
+--   'Dhall.Import.AllowRemoteImports'.
+remoteImportMode
+  :: (HasEvaluateSettings s)
+  => Lens' s Dhall.Import.RemoteImportMode
+remoteImportMode =
+    evaluateSettings
+        . lens _remoteImportMode (\s x -> s { _remoteImportMode = x })
 
 -- | Access the warning reporting action.
 reportWarning
@@ -430,10 +443,11 @@ emptyStatusWithSettings EvaluateSettings{..} rootDir =
         transform (Dhall.Import.emptyStatusWithManager _newManager rootDir)
     where
         transform =
-               Lens.set Dhall.Import.substitutions   _substitutions
-            .  Lens.set Dhall.Import.normalizer      _normalizer
-            .  Lens.set Dhall.Import.startingContext _startingContext
-            .  Lens.set Dhall.Import.reportWarning   _reportWarning
+               Lens.set Dhall.Import.substitutions    _substitutions
+            .  Lens.set Dhall.Import.normalizer       _normalizer
+            .  Lens.set Dhall.Import.startingContext  _startingContext
+            .  Lens.set Dhall.Import.remoteImportMode _remoteImportMode
+            .  Lens.set Dhall.Import.reportWarning    _reportWarning
 
 -- | Normalize an expression, using the supplied `InputSettings`
 normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void
