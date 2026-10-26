@@ -156,4 +156,16 @@ in
 
     # Cross .env shells are awkward; this at least exposes the compiler.
     shell-dhall-try = hpkgs.dhall-try.env;
+
+    # CI garbage-collects the Nix store before saving it, and keeps only GC
+    # roots. `nix-build -A dhall-try` roots the interpreter, which does not
+    # reference the cross compiler. GitHub does not update a cache key once
+    # it exists, so the compiler has to be in that first save or a later
+    # source change rebuilds it and the rebuild is discarded.
+    # The output file names the compiler store path. GHC's lib/settings
+    # points at emcc, so Emscripten stays in the closure too.
+    cache-roots = pkgs.runCommand "dhall-try-cache-roots" { } ''
+      mkdir -p "$out"
+      printf '%s\n' ${hpkgs.ghc} > "$out/ghc"
+    '';
   }

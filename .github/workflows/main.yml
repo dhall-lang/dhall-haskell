@@ -243,9 +243,13 @@ jobs:
           purge-primary-key: never
       - name: "Build dhall-try"
         run: |
-          nix-build nix/javascript.nix -A dhall-try
+          nix-build nix/javascript.nix -A dhall-try -o "$GITHUB_WORKSPACE/result"
+          # Leave this symlink in place. It is a GC root for the cross compiler,
+          # which ./result does not keep. The cache key is not updated after
+          # the first save.
+          nix-build nix/javascript.nix -A cache-roots -o "$GITHUB_WORKSPACE/dhall-try-cache-roots"
           # result/ is a symlink into /nix/store, which upload-artifact will not follow.
-          cp -L result/bin/dhall-try.jsexe/all.min.js "$GITHUB_WORKSPACE/dhall-try.all.min.js"
+          cp -L "$GITHUB_WORKSPACE/result/bin/dhall-try.jsexe/all.min.js" "$GITHUB_WORKSPACE/dhall-try.all.min.js"
       - name: "Upload minified interpreter"
         uses: actions/upload-artifact@v7
         with:
