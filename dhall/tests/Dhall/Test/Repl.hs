@@ -64,6 +64,7 @@ import System.Timeout (timeout)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@?=))
 
+import qualified Dhall.Import
 import qualified Dhall.Repl
 import qualified System.Directory as Directory
 import qualified System.IO as IO
@@ -212,7 +213,12 @@ runAsReplWorker = do
                 other -> fail ("bad DHALL_REPL_TEST_EXPLAIN: " <> show other)
             mapM_ prepareHandle [stdin, stdout, stderr]
             withUtf8ConsoleCodePage
-                (Dhall.Repl.repl charset explain Dhall.Repl.noReplLimits)
+                (Dhall.Repl.repl
+                    charset
+                    explain
+                    Dhall.Repl.noReplLimits
+                    Dhall.Import.AllowRemoteImports
+                )
             pure True
         _ ->
             pure False

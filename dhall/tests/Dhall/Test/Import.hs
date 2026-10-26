@@ -10,8 +10,9 @@ import Data.Void         (Void)
 #if __GLASGOW_HASKELL__ >= 906
 import Data.Default      (def)
 #endif
-import System.FilePath   ((</>))
-import Test.Tasty        (TestTree)
+import System.Environment (setEnv, unsetEnv)
+import System.FilePath    ((</>))
+import Test.Tasty         (TestTree)
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
@@ -95,6 +96,7 @@ getTests = do
                 , defaultStatusRecordsSources
                 , omittingImportSourcesLeavesResolutionUnchanged
                 , invalidSubstitutionKeepsParseSource
+                , noRemoteTests
                 ]
 
     return testTree
@@ -615,6 +617,109 @@ assertPathMentioned fragment paths =
     Tasty.HUnit.assertBool
         (fragment ++ " missing from " ++ show paths)
         (any (List.isInfixOf fragment) paths)
+
+noRemoteTests :: TestTree
+noRemoteTests =
+    Tasty.testGroup "no-remote"
+        [ expectRemoteDisabled "https://example.com/foo.dhall"
+        , expectRemoteDisabled "https://example.com/foo.dhall as Text"
+        , expectRemoteDisabled "https://example.com/foo.dhall as Bytes"
+        , expectRemoteDisabled
+            "https://example.com/foo.dhall sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        , Tasty.HUnit.testCase "https as Location" $ do
+            expr <- resolveRejected "https://example.com/foo.dhall as Location"
+            let rendered = Core.pretty (Core.denote expr)
+            Tasty.HUnit.assertBool
+                (Text.unpack rendered)
+                (Text.isInfixOf ".Remote" rendered
+                    && Text.isInfixOf "\"https://example.com/foo.dhall\"" rendered
+                )
+        , Tasty.HUnit.testCase "local as Text and as Bytes" $
+            Temp.withSystemTempDirectory "no-remote" $ \dir -> do
+                Text.IO.writeFile (dir </> "note.txt") "hello"
+                ByteString.Char8.writeFile
+                    (dir </> "note.bin")
+                    (ByteString.Char8.pack "hi")
+                textExpr <-
+                    resolveIn dir Import.RejectRemoteImports "./note.txt as Text"
+                bytesExpr <-
+                    resolveIn dir Import.RejectRemoteImports "./note.bin as Bytes"
+                Tasty.HUnit.assertEqual
+                    "as Text"
+                    (Core.TextLit (Core.Chunks [] "hello") :: Core.Expr Void Void)
+                    (Core.denote textExpr :: Core.Expr Void Void)
+                Tasty.HUnit.assertEqual
+                    "as Bytes"
+                    (Core.BytesLit (ByteString.Char8.pack "hi") :: Core.Expr Void Void)
+                    (Core.denote bytesExpr :: Core.Expr Void Void)
+        , Tasty.HUnit.testCase "env import" $
+            Exception.bracket_
+                (setEnv "DHALL_NO_REMOTE_TEST_VALUE" "1")
+                (unsetEnv "DHALL_NO_REMOTE_TEST_VALUE")
+                $ do
+                    expr <- resolveRejected "env:DHALL_NO_REMOTE_TEST_VALUE"
+                    Tasty.HUnit.assertEqual
+                        "env"
+                        (Core.NaturalLit 1 :: Core.Expr Void Void)
+                        (Core.denote expr :: Core.Expr Void Void)
+        , Tasty.HUnit.testCase "import alternative" $ do
+            expr <- resolveRejected "https://example.com/foo.dhall ? 1"
+            Tasty.HUnit.assertEqual
+                "alternative"
+                (Core.NaturalLit 1 :: Core.Expr Void Void)
+                (Core.denote expr :: Core.Expr Void Void)
+        ]
+
+expectRemoteDisabled :: Text -> TestTree
+expectRemoteDisabled code =
+    Tasty.HUnit.testCase (Text.unpack code) $ do
+        result <-
+            Exception.try @SomeException
+                (resolveRejected code)
+        case remoteDisabledUrl result of
+            Just url
+                | "https://example.com/foo.dhall" `List.isInfixOf` url ->
+                    pure ()
+            other ->
+                Tasty.HUnit.assertFailure
+                    ("expected RemoteImportsDisabled, got " ++ show other)
+
+remoteDisabledUrl :: Either SomeException (Core.Expr Parser.Src Void) -> Maybe String
+remoteDisabledUrl (Right _) = Nothing
+remoteDisabledUrl (Left some) =
+    case missingImports some of
+        Just [one]
+            | Just (Import.Imported _ (Import.RemoteImportsDisabled url)) <-
+                Exception.fromException one ->
+                Just url
+        _ ->
+            Nothing
+  where
+    missingImports exception =
+        case Exception.fromException @(Parser.SourcedException Import.MissingImports) exception of
+            Just (Parser.SourcedException _ (Import.MissingImports es)) ->
+                Just es
+            Nothing ->
+                case Exception.fromException @Import.MissingImports exception of
+                    Just (Import.MissingImports es) ->
+                        Just es
+                    Nothing ->
+                        Nothing
+
+resolveRejected :: Text -> IO (Core.Expr Parser.Src Void)
+resolveRejected = resolveIn "." Import.RejectRemoteImports
+
+resolveIn
+    :: FilePath
+    -> Import.RemoteImportMode
+    -> Text
+    -> IO (Core.Expr Parser.Src Void)
+resolveIn directory remoteImportMode code = do
+    parsed <- Core.throws (Parser.exprFromText "(test)" code)
+    let status =
+            (Import.emptyStatus directory)
+                { Import._remoteImportMode = remoteImportMode }
+    State.evalStateT (Import.loadWith parsed) status
 
 assertPathAbsent :: String -> [FilePath] -> IO ()
 assertPathAbsent fragment paths =

@@ -551,7 +551,16 @@ configSpec =
                     ]
                 ])
       parsed `shouldBe`
-        Aeson.Success (ServerConfig (Specify ASCII) 42)
+        Aeson.Success (ServerConfig (Specify ASCII) 42 False)
+    it "reads noRemote" $ do
+      let parsed =
+            Aeson.fromJSON
+              (Aeson.object
+                [ "vscode-dhall-lsp-server" Aeson..= Aeson.object
+                    [ "noRemote" Aeson..= True ]
+                ])
+      parsed `shouldBe`
+        Aeson.Success (def { noRemote = True } :: ServerConfig)
     it "rejects a malformed section" $
       case Aeson.fromJSON (Aeson.object ["vscode-dhall-lsp-server" Aeson..= (5 :: Int)]) of
         Aeson.Error _ -> return ()
