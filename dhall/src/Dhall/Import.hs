@@ -495,6 +495,15 @@ data LoadResult = LoadOk ImportSemantics | LoadHole ImportHole
 asInlined :: Expr s Void -> Expr s ImportHole
 asInlined = unsafeCoerce
 
+-- | Inverse of 'asInlined'.  Valid only when the expression has no 'Embed'.
+holeFree :: Expr s ImportHole -> Expr s Void
+holeFree = unsafeCoerce
+
+-- | Like 'Core.denote' without rebuilding.  Valid only when the expression has
+--   no 'Note'.
+noteFree :: Expr s a -> Expr t a
+noteFree = unsafeCoerce
+
 -- | Twin used where a hole makes the shared tree unreachable.
 --
 --   Evaluation runs only after every collected import error has been rejected.
@@ -755,15 +764,86 @@ rememberImportBody ref body = do
             when _keepImportBodies
                 (zoom importBodies (State.modify' (Dhall.Map.insert ref body)))
 
--- | Record the twin, after substitutions, when this load will be evaluated
---   through 'normalizeLoaded'.  A plain 'loadWith' skips this.
-rememberSharedTwin :: Chained -> Expr Src ImportRef -> StateT Status IO ()
-rememberSharedTwin chained twinExpr = do
+-- | The value of a type-checked import, after substitutions and without notes.
+--
+--   Under 'normalizeLoaded' it is built from the twin, with each child
+--   reference replaced by that child's value.  Otherwise it grafts the denoted
+--   children into the parsed file, falling back to the inlined tree.  Both
+--   avoid copying every child at every level of the import graph.
+sharedImportValue
+    :: Chained
+    -> Expr Src Import
+    -> Expr Src Void
+    -> Expr Src ImportRef
+    -> StateT Status IO (Expr Void Void)
+sharedImportValue chained parsedImport resolvedExpr twinExpr = do
     Status { _sharedEvaluation } <- State.get
-    when _sharedEvaluation $ do
-        ref <- ensureImportRef chained
-        substitutedTwin <- applyStatusSubstitutions twinExpr
-        rememberImportBody ref substitutedTwin
+
+    if _sharedEvaluation
+        then do
+            ref <- ensureImportRef chained
+
+            -- Denote first so that 'Core.denote' doesn't copy substitutions
+            substitutedTwin <-
+                applyStatusSubstitutions
+                    (Core.renote (Core.denote twinExpr :: Expr Void ImportRef))
+
+            rememberImportBody ref substitutedTwin
+
+            children <-
+                liftIO
+                    (Exception.evaluate
+                        (LazyIntMap.fromList (childValues twinExpr resolvedExpr)))
+
+            liftIO (bindChildren children (noteFree substitutedTwin))
+        else do
+            substitutedParsed <- applyStatusSubstitutions parsedImport
+
+            grafted <-
+                Maybe.runMaybeT
+                    (graftDenotedImports chained (Core.denote substitutedParsed))
+
+            case grafted of
+                Just expr -> return expr
+                Nothing   -> fmap Core.denote (applyStatusSubstitutions resolvedExpr)
+
+-- | The value of each child import, found by walking the twin and the inlined
+--   expression together, since they have the same shape.
+childValues :: Expr Src ImportRef -> Expr Src Void -> [(Int, Expr Void Void)]
+childValues (Embed (ImportRef n)) value =
+    [(n, noteFree value)]
+childValues twin inlined
+    | null twin =
+        []
+    | length twinChildren /= length inlinedChildren =
+        error "childValues: the twin and the inlined expression differ in shape"
+    | otherwise =
+        concat (zipWith childValues twinChildren inlinedChildren)
+  where
+    twinChildren = toListOf Syntax.subExpressions twin
+
+    inlinedChildren = toListOf Syntax.subExpressions inlined
+
+-- | Replace each import reference by its child's value.
+--
+--   This is strict so that each reference holds only its own child, which a
+--   lazy '>>=' would not guarantee.  Subterms without references are reused.
+bindChildren
+    :: LazyIntMap.IntMap (Expr Void Void)
+    -> Expr Void ImportRef
+    -> IO (Expr Void Void)
+bindChildren children = go
+  where
+    go expression
+        | null expression =
+            return (dropImportRefs expression)
+        | otherwise =
+            Exception.evaluate =<< Syntax.subExpressionsWith onRef go expression
+
+    onRef (ImportRef n) =
+        case LazyIntMap.lookup n children of
+            Just value -> return value
+            Nothing    -> error "bindChildren: child import has no value"
 
 -- | Replace the shared body.  Hashed imports do this with the normal form.
 replaceImportBody :: ImportRef -> Expr Src ImportRef -> StateT Status IO ()
@@ -1175,20 +1255,14 @@ finishTypecheckedImport
     -> StateT Status IO LoadResult
 finishTypecheckedImport parsedImport resolvedExpr twinExpr = do
     Status { _stack } <- State.get
-    let here = NonEmpty.head _stack
-    substitutedParsed <- applyStatusSubstitutions parsedImport
-    grafted <-
-        Maybe.runMaybeT
-            (graftDenotedImports here (Core.denote substitutedParsed))
-    semantics <- case grafted of
-        Just expr ->
-            return expr
-        Nothing -> do
-            substitutedExpr <-
-                applyStatusSubstitutions
-                    (unsafeCoerce resolvedExpr :: Expr Src Void)
-            return (Core.denote substitutedExpr)
-    rememberSharedTwin here twinExpr
+
+    semantics <-
+        sharedImportValue
+            (NonEmpty.head _stack)
+            parsedImport
+            (holeFree resolvedExpr)
+            twinExpr
+
     return
         ( LoadOk ImportSemantics
             { importSemantics = semantics
@@ -1415,7 +1489,7 @@ loadImportWithSemisemanticCache
                                         Left _ -> do
                                             annotated <-
                                                 applyAnnotatedSubstitutions
-                                                    (unsafeCoerce resolvedExpr :: Expr Src Void)
+                                                    (holeFree resolvedExpr)
                                             return
                                                 (Dhall.TypeCheck.typeWith
                                                     _startingContext
@@ -2265,8 +2339,8 @@ resolveImports expr₀ = case expr₀ of
             let inlined = asInlined (Core.renote importSemantics)
             if _sharedEvaluation
                 then do
-                    ImportRef n <- ensureImportRef child
-                    return (inlined, Embed (ImportRef n), True)
+                    ref <- ensureImportRef child
+                    return (inlined, Embed ref, True)
                 else return (inlined, retwin inlined, False)
 
 {-
