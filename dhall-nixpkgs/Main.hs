@@ -147,6 +147,7 @@ data GitHub = GitHub
     , file :: FilePath
     , source :: Bool
     , document :: Bool
+    , noRemote :: Bool
     }
 
 data Directory = Directory
@@ -156,6 +157,7 @@ data Directory = Directory
     , source :: Bool
     , document :: Bool
     , fixedOutputDerivations :: Bool
+    , noRemote :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -220,6 +222,13 @@ parseFixedOutputDerivations =
         <>  Options.help "Translate Dhall remote imports to Nix fixed-output derivations"
         )
 
+parseNoRemote :: Parser Bool
+parseNoRemote =
+    Options.switch
+        (   Options.long "no-remote"
+        <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+        )
+
 parseName :: Parser (Maybe Text)
 parseName =
     optional
@@ -271,6 +280,8 @@ parseGitHub = do
 
     document <- parseDocument
 
+    noRemote <- parseNoRemote
+
     return GitHub{..}
 
 parseDirectory :: Parser Directory
@@ -286,6 +297,8 @@ parseDirectory = do
     document <- parseDocument
 
     fixedOutputDerivations <- parseFixedOutputDerivations
+
+    noRemote <- parseNoRemote
 
     return Directory{..}
 
@@ -616,7 +629,7 @@ makeNixFunctionParams buildDhallFuncName nixDependencies =
         )
 
 githubToNixpkgs :: GitHub -> IO ()
-githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document } = do
+githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document, noRemote } = do
     URI{ uriScheme, uriAuthority = Just URIAuth{ uriUserInfo, uriRegName, uriPort }, uriPath, uriQuery, uriFragment } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
             Nothing -> die (RepositoryIsNotAValidURI uri)
@@ -733,7 +746,14 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    let status = Dhall.Import.emptyStatus baseDirectory
+    let remoteImportMode =
+            if noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus baseDirectory)
+                { Dhall.Import._remoteImportMode = remoteImportMode }
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -768,7 +788,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations, noRemote } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
@@ -787,7 +807,14 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutp
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    let status = Dhall.Import.emptyStatus (Turtle.directory expressionFile)
+    let remoteImportMode =
+            if noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus (Turtle.directory expressionFile))
+                { Dhall.Import._remoteImportMode = remoteImportMode }
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 

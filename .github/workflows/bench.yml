@@ -68,18 +68,18 @@ jobs:
       - name: "Run parser benchmarks"
         if: ${{ env.BENCH_PATTERN == '' }}
         run: |
-          stack bench dhall:dhall-parser --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/parser.csv --timeout 300"
+          stack bench dhall:dhall-parser --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/parser.csv --timeout 300 +RTS -T -RTS"
       - name: "Run deep-nested-large-record benchmarks"
         if: ${{ env.BENCH_PATTERN == '' }}
         run: |
-          stack bench dhall:deep-nested-large-record --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/deep-nested-large-record.csv --timeout 300"
+          stack bench dhall:deep-nested-large-record --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/deep-nested-large-record.csv --timeout 300 +RTS -T -RTS"
       - name: "Run evaluation benchmarks"
         run: |
           extra=()
           if [ -n "${BENCH_PATTERN}" ]; then
             extra+=(--pattern "${BENCH_PATTERN}")
           fi
-          stack bench dhall:evaluation --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/evaluation.csv --timeout 300 ${extra[*]}"
+          stack bench dhall:evaluation --benchmark-arguments "--csv ${GITHUB_WORKSPACE}/evaluation.csv --timeout 300 ${extra[*]} +RTS -T -RTS"
       - name: "Convert tasty-bench CSV to github-action-benchmark JSON"
         if: ${{ !cancelled() }}
         run: |

@@ -196,7 +196,14 @@ Source-Repository head
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall
 
 Flag with-http
-  Description: Include support for importing dhall modules from HTTP URLs
+  Description:
+    Include support for importing dhall modules from HTTP URLs.
+    Nixpkgs compiles dhall with this flag disabled so the binary has no
+    HTTP client. Hashed URL imports still resolve when Nix has already
+    placed them in the semantic cache; a cache miss fails inside Dhall
+    instead of opening a connection. The runtime --no-remote flag is
+    separate: it rejects remote code, Text, and Bytes imports before the
+    cache is consulted, and the HTTP client stays linked.
   Default:     True
   Manual:      True
 

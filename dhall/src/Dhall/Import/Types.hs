@@ -93,6 +93,24 @@ data Depends = Depends { parent :: Chained, child :: Chained }
 -}
 data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache deriving (Eq)
 
+{-| Whether URL imports may fetch.
+
+    'AllowRemoteImports' is the default.  'RejectRemoteImports' fails an
+    @http@ or @https@ import used as code, @as Text@, or @as Bytes@ before
+    either import cache is consulted and before headers are resolved.
+    @as Location@, local files, and @env:@ imports are unchanged, including
+    @as Text@ and @as Bytes@.
+
+    This is not the Cabal flag @-f-with-http@.  Nixpkgs compiles @dhall@ with
+    that flag disabled so the binary has no HTTP client.  A hashed URL import
+    still resolves when Nix has already placed it in the semantic cache; a
+    cache miss fails inside Dhall instead of opening a connection.
+    'RejectRemoteImports' still links the HTTP client, and it rejects those
+    cache hits.  @as Location@ fetches nothing under either control.
+-}
+data RemoteImportMode = AllowRemoteImports | RejectRemoteImports
+    deriving (Eq, Show)
+
 -- | Shared state for HTTP requests
 type Manager =
 #ifdef WITH_HTTP
@@ -200,6 +218,11 @@ data Status = Status
     , _startingContext :: Context (Expr Src Void)
 
     , _semanticCacheMode :: SemanticCacheMode
+
+    , _remoteImportMode :: RemoteImportMode
+    -- ^ 'RejectRemoteImports' fails URL imports that would fetch.  See
+    --   'RemoteImportMode'.  The default, from 'emptyStatusWith', is
+    --   'AllowRemoteImports'.
 
     , _cacheWarning :: CacheWarning
     -- ^ Records whether or not we already warned the user about issues with
@@ -333,6 +356,8 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _semanticCacheMode = UseSemanticCache
 
+    _remoteImportMode = AllowRemoteImports
+
     _cacheWarning = CacheNotWarned
 
     _reportWarning = Dhall.Util.printWarning
@@ -450,6 +475,10 @@ importHoles = lens _importHoles (\s x -> s { _importHoles = x })
 -- | Lens from a `Status` to its `_verifySemanticHash` field
 verifySemanticHash :: Lens' Status Bool
 verifySemanticHash = lens _verifySemanticHash (\s x -> s { _verifySemanticHash = x })
+
+-- | Lens from a `Status` to its `_remoteImportMode` field
+remoteImportMode :: Lens' Status RemoteImportMode
+remoteImportMode = lens _remoteImportMode (\s x -> s { _remoteImportMode = x })
 
 -- | Lens from a `Status` to its `_importSources` field
 importSources :: Lens' Status (Map Chained ResolvedImportSource)

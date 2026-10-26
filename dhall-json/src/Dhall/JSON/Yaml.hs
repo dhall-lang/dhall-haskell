@@ -28,6 +28,7 @@ import qualified Data.ByteString.Lazy
 import qualified Data.Text.Encoding
 import qualified Data.Vector
 import qualified Dhall
+import qualified Dhall.Import
 import qualified Dhall.JSON
 import qualified Options.Applicative
 
@@ -41,6 +42,7 @@ data Options = Options
     , output         :: Maybe FilePath
     , noEdit         :: Bool
     , preserveHeader :: Bool
+    , remoteImportMode :: Dhall.Import.RemoteImportMode
     }
 
 defaultOptions :: Options
@@ -53,8 +55,9 @@ defaultOptions =
           , file = Nothing
           , output = Nothing
           , noEdit = False
-          , preserveHeader = False
-          }
+    , preserveHeader = False
+    , remoteImportMode = Dhall.Import.AllowRemoteImports
+    }
 
 parseDocuments :: Parser Bool
 parseDocuments =
@@ -90,7 +93,7 @@ dhallToYaml Options{..} mFilePath code = do
 
   let adapt (header, value) = (header, omission value)
 
-  (Header comment, json) <- adapt <$> explaining (Dhall.JSON.codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+  (Header comment, json) <- adapt <$> explaining (Dhall.JSON.codeToHeaderAndValue conversion UseYAMLEncoding remoteImportMode mFilePath code)
 
   let suffix
         | preserveHeader = Data.Text.Encoding.encodeUtf8 comment

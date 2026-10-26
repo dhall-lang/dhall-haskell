@@ -484,23 +484,31 @@ defaultConversion = Conversion
 type ExprX = Expr Src Void
 
 -- | Parse schema code and resolve imports
-resolveSchemaExpr :: Text  -- ^ type code (schema)
-                  -> IO ExprX
-resolveSchemaExpr code = do
+resolveSchemaExpr
+    :: Dhall.Import.RemoteImportMode
+    -> Text  -- ^ type code (schema)
+    -> IO ExprX
+resolveSchemaExpr remoteImportMode code = do
     parsedExpression <-
       case Dhall.Parser.exprFromText "\n\ESC[1;31mSCHEMA\ESC[0m" code of
         Left  err              -> throwIO err
         Right parsedExpression -> return parsedExpression
-    Dhall.Import.load parsedExpression
+    let status =
+            (Dhall.Import.emptyStatus ".")
+                { Dhall.Import._semanticCacheMode = Dhall.Import.UseSemanticCache
+                , Dhall.Import._remoteImportMode = remoteImportMode
+                }
+    Dhall.Import.loadWithStatus status Dhall.Import.UseSemanticCache parsedExpression
 
 {-| Check that the Dhall type expression actually has type 'Type'
 >>> :set -XOverloadedStrings
 >>> import Dhall.Core
 
->>> typeCheckSchemaExpr id =<< resolveSchemaExpr "List Natural"
+>>> import Dhall.Import (RemoteImportMode(AllowRemoteImports))
+>>> typeCheckSchemaExpr id =<< resolveSchemaExpr AllowRemoteImports "List Natural"
 App List Natural
 
->>> typeCheckSchemaExpr id =<< resolveSchemaExpr "+1"
+>>> typeCheckSchemaExpr id =<< resolveSchemaExpr AllowRemoteImports "+1"
 *** Exception:
 Error: Schema expression is successfully parsed but has Dhall type:
 Integer

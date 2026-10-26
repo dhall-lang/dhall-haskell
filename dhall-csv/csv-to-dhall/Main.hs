@@ -9,6 +9,7 @@ import Control.Exception   (SomeException)
 import Data.Text           (Text)
 import Data.Version        (showVersion)
 import Dhall.CsvToDhall
+import Dhall.Import        (RemoteImportMode (..))
 import Dhall.Pretty        (CharacterSet (..))
 import Options.Applicative (Parser, ParserInfo)
 
@@ -39,6 +40,7 @@ data Options
         , ascii      :: Bool
         , plain      :: Bool
         , noHeader   :: Bool
+        , remoteImportMode :: RemoteImportMode
         }
     | Type
         { file       :: Maybe FilePath
@@ -61,6 +63,7 @@ parseOptions =
         <*> parseASCII
         <*> parsePlain
         <*> parseNoHeader
+        <*> parseNoRemote
         )
     <|> parseVersion
   where
@@ -127,6 +130,13 @@ parseOptions =
             <>  Options.help "Convert CSV with no header"
             )
 
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
+
 
 main :: IO ()
 main = do
@@ -147,9 +157,9 @@ main = do
                 Left err -> fail err
                 Right csv -> pure csv
 
-    let toSchema schema = do
+    let toSchema remoteImportMode schema = do
             finalSchema <- case schema of
-                Just text -> resolveSchemaExpr text
+                Just text -> resolveSchemaExpr remoteImportMode text
                 Nothing   -> fail "Please specify a schema. Type inference has not been implemented"
 
             typeCheckSchemaExpr id finalSchema
@@ -164,7 +174,7 @@ main = do
 
                 csv <- toCsv (not noHeader) file
 
-                finalSchema <- toSchema schema
+                finalSchema <- toSchema remoteImportMode schema
 
                 expression <- Dhall.Core.throws $ dhallFromCsv conversion finalSchema csv
 

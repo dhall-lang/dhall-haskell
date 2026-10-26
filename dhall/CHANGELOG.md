@@ -1,5 +1,10 @@
 1.42.4
 
+* `dhall --no-remote` rejects http and https imports used as code, as Text,
+  or as Bytes, including integrity-checked cache hits. as Location, local
+  files, and env imports are unchanged. This is separate from the Cabal flag
+  `-f-with-http`, which removes the HTTP client so Nix can still satisfy
+  hashed URL imports from a pre-filled semantic cache.
 * Drop the direct `mmorph`, `dotgen`, and `microlens-mtl` dependencies.
   `dhall --dot` still prints the same Graphviz graph. `dhall-nixpkgs`
   also no longer depends on `mmorph` or `microlens-mtl`.

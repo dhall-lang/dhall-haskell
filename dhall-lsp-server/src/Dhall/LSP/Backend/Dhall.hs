@@ -198,13 +198,15 @@ parseWithHeader = first ErrorParse . Dhall.exprAndHeaderFromText ""
 -- | Resolve all imports in an expression.
 load
     :: EvaluateSettings
+    -> Import.RemoteImportMode
     -> FileIdentifier
     -> Expr Src Dhall.Import
     -> Cache
     -> IO (Either DhallError (Cache, Expr Src Void))
-load settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } = do
+load settings remoteImportMode (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } = do
   let emptyStatus =
-             set Import.substitutions   (view Dhall.substitutions settings)
+             set Import.remoteImportMode remoteImportMode
+          .  set Import.substitutions   (view Dhall.substitutions settings)
           .  set Import.normalizer      (view Dhall.normalizer settings)
           .  set Import.startingContext (view Dhall.startingContext settings)
           $ Import.emptyStatusWithManager (view Dhall.newManager settings) ""
@@ -250,14 +252,16 @@ load settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, ca
 --   take down the server.
 loadCollected
     :: EvaluateSettings
+    -> Import.RemoteImportMode
     -> FileIdentifier
     -> Expr Src Dhall.Import
     -> Cache
     -> IORef (Map Text (UTCTime, SomeException))
     -> IO (Either DhallError (Cache, Expr Src Import.ImportHole, [Import.CollectedImportError], Map Import.Chained Import.ResolvedImportSource))
-loadCollected settings (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } negative = do
+loadCollected settings remoteImportMode (FileIdentifier chained) expr cache@Cache { cacheGraph = graph, cacheSemantics = sem, cacheImportTypes = types } negative = do
   let emptyStatus =
-             set Import.substitutions   (view Dhall.substitutions settings)
+             set Import.remoteImportMode remoteImportMode
+          .  set Import.substitutions   (view Dhall.substitutions settings)
           .  set Import.normalizer      (view Dhall.normalizer settings)
           .  set Import.startingContext (view Dhall.startingContext settings)
           $ Import.emptyStatusWithManager (view Dhall.newManager settings) ""

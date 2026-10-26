@@ -83,7 +83,7 @@ module Dhall.Csv (
     , CompileError
     ) where
 
-import Control.Exception (Exception, displayException, throwIO)
+import Control.Exception (Exception, displayException, evaluate, throwIO)
 import Data.Csv          (NamedRecord, ToField (..))
 import Data.Either       (fromRight)
 import Data.Maybe        (fromMaybe)
@@ -91,10 +91,11 @@ import Data.Sequence     (Seq)
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Core        (DhallDouble (..), Expr)
-import Dhall.Import      (SemanticCacheMode (..))
+import Dhall.Import      (RemoteImportMode, SemanticCacheMode (..))
 import Dhall.Util        (_ERROR)
 import Prettyprinter     (Pretty)
 
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Csv
 import qualified Data.Foldable
 import qualified Data.Text
@@ -238,18 +239,33 @@ dhallToCsv e0 = listConvert $ Core.normalize e0
 {-| Convert a @Text@ with Dhall code to a list of @NamedRecord@s.
 -}
 codeToValue
-    :: Maybe FilePath
+    :: RemoteImportMode
+    -> Maybe FilePath
     -> Text
     -> IO [NamedRecord]
-codeToValue mFilePath code = do
+codeToValue remoteImportMode mFilePath code = do
     parsedExpression <- Core.throws (Dhall.Parser.exprFromText (fromMaybe "(input)" mFilePath) code)
 
     let rootDirectory = case mFilePath of
             Nothing -> "."
             Just fp -> System.FilePath.takeDirectory fp
 
-    (normalizedExpression, inferred) <-
-        Dhall.Import.loadRelativeToTypecheckAndNormalize rootDirectory UseSemanticCache parsedExpression
+    let status =
+            (Dhall.Import.emptyStatus rootDirectory)
+                { Dhall.Import._semanticCacheMode = UseSemanticCache
+                , Dhall.Import._remoteImportMode = remoteImportMode
+                }
+
+    ((resolvedExpression, shared), status') <-
+        State.runStateT (Dhall.Import.loadWithShared parsedExpression) status
+
+    inferred <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded parsedExpression resolvedExpression)
+            status'
+
+    normalizedExpression <-
+        evaluate (Dhall.Import.normalizeLoaded status' shared)
 
     _ <- Core.throws inferred
 

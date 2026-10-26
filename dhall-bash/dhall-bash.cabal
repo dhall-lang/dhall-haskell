@@ -49,6 +49,7 @@ Executable dhall-to-bash
         dhall                                      ,
         dhall-bash                                 ,
         optparse-applicative >= 0.14.0.0  && < 0.20,
-        text
+        text                                       ,
+        transformers         >= 0.5.2.0   && < 0.7
     GHC-Options: -Wall
     Default-Language: Haskell2010

@@ -8,6 +8,7 @@ import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.Aeson          (Value)
 import Data.Version        (showVersion)
+import Dhall.Import        (RemoteImportMode (..))
 import Dhall.JSON          (Conversion, SpecialDoubleMode (..))
 import Options.Applicative (Parser, ParserInfo)
 
@@ -34,6 +35,7 @@ data Options
         , approximateSpecialDoubles :: Bool
         , file                      :: Maybe FilePath
         , output                    :: Maybe FilePath
+        , remoteImportMode          :: RemoteImportMode
         }
     | Version
 
@@ -47,6 +49,7 @@ parseOptions =
         <*> parseApproximateSpecialDoubles
         <*> optional parseFile
         <*> optional parseOutput
+        <*> parseNoRemote
         )
     <|> parseVersion
   where
@@ -105,6 +108,13 @@ parseOptions =
             <>  Options.action "file"
             )
 
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.info
@@ -150,7 +160,7 @@ main = do
                     Nothing   -> Text.IO.getContents
                     Just path -> Text.IO.readFile path
 
-                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode file text)
+                json <- omission <$> explaining (Dhall.JSON.codeToValue conversion specialDoubleMode remoteImportMode file text)
 
                 let write =
                         case output of

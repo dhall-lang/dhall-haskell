@@ -221,11 +221,12 @@ import Data.Aeson          (ToJSON (..), Value (..))
 import Data.Maybe          (fromMaybe)
 import Data.Text           (Text)
 import Data.Void           (Void)
-import Dhall.Core          (Binding (..), DhallDouble (..), Expr)
+import Dhall.Core          (Binding (..), DhallDouble (..), Expr, Import)
 import Dhall.Import        (SemanticCacheMode (..))
 import Dhall.JSON.Util     (pattern FA, pattern V)
 import Dhall.Map           (Map)
-import Dhall.Parser        (Header(..))
+import Dhall.Parser        (Header(..), Src)
+import Dhall.TypeCheck     (TypeError)
 import Options.Applicative (Parser)
 import Prelude             hiding (getContents)
 import Prettyprinter       (Pretty)
@@ -237,7 +238,8 @@ import qualified Data.Map
 import qualified Data.Ord
 import qualified Data.Text
 import qualified Data.Vector               as Vector
-import qualified Dhall.Core                as Core
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Dhall.Core                       as Core
 import qualified Dhall.Import
 import qualified Dhall.JSON.Compat         as JSON.Compat
 import qualified Dhall.Map
@@ -1187,22 +1189,44 @@ handleSpecialDoubles specialDoubleMode =
     approximateWithinJSON _ =
         return Nothing
 
+-- | Resolve imports relative to a directory, honoring 'Dhall.Import.RemoteImportMode'.
+loadRelativeToWithMode
+    :: Dhall.Import.RemoteImportMode
+    -> FilePath
+    -> Expr Src Import
+    -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
+loadRelativeToWithMode remoteImportMode rootDirectory expression = do
+    let status =
+            (Dhall.Import.emptyStatus rootDirectory)
+                { Dhall.Import._semanticCacheMode = UseSemanticCache
+                , Dhall.Import._remoteImportMode = remoteImportMode
+                }
+    (resolved, status') <-
+        State.runStateT (Dhall.Import.loadWith expression) status
+    inferred <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded expression resolved)
+            status'
+    pure (resolved, inferred)
+
 {-| Convert a piece of Text carrying a Dhall inscription to an equivalent JSON Value
 
 >>> :set -XOverloadedStrings
 >>> import Core
->>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON Nothing "{ a = 1 }"
+>>> import Dhall.Import (RemoteImportMode(AllowRemoteImports))
+>>> Dhall.JSON.codeToValue defaultConversion ForbidWithinJSON AllowRemoteImports Nothing "{ a = 1 }"
 >>> Object (fromList [("a",Number 1.0)])
 -}
 codeToValue
   :: Conversion
   -> SpecialDoubleMode
+  -> Dhall.Import.RemoteImportMode
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO Value
-codeToValue conversion specialDoubleMode mFilePath code = do
-  fmap snd (codeToHeaderAndValue conversion specialDoubleMode mFilePath code)
+codeToValue conversion specialDoubleMode remoteImportMode mFilePath code = do
+  fmap snd (codeToHeaderAndValue conversion specialDoubleMode remoteImportMode mFilePath code)
 
 {-| This is like `codeToValue`, except also returning a `Header` that is a
     valid YAML comment derived from the original Dhall code's `Header`
@@ -1210,11 +1234,12 @@ codeToValue conversion specialDoubleMode mFilePath code = do
 codeToHeaderAndValue
   :: Conversion
   -> SpecialDoubleMode
+  -> Dhall.Import.RemoteImportMode
   -> Maybe FilePath  -- ^ The source file path. If no path is given, imports
                      -- are resolved relative to the current directory.
   -> Text  -- ^ Input text.
   -> IO (Header, Value)
-codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
+codeToHeaderAndValue conversion specialDoubleMode remoteImportMode mFilePath code = do
     (Header header, parsedExpression) <- Core.throws (Dhall.Parser.exprAndHeaderFromText (fromMaybe "(input)" mFilePath) code)
 
     let adapt line =
@@ -1229,7 +1254,7 @@ codeToHeaderAndValue conversion specialDoubleMode mFilePath code = do
             Just fp -> System.FilePath.takeDirectory fp
 
     (resolvedExpression, inferred) <-
-        Dhall.Import.loadRelativeToAndTypecheck rootDirectory UseSemanticCache parsedExpression
+        loadRelativeToWithMode remoteImportMode rootDirectory parsedExpression
 
     _ <- Core.throws inferred
 

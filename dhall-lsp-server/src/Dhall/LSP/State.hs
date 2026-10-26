@@ -58,12 +58,18 @@ defaultOutputBytes = 16 * 1024
 data ServerConfig = ServerConfig
   { chosenCharacterSet :: ChooseCharacterSet
   , maxOutputSize :: Int
+  , noRemote :: Bool
+  -- ^ When 'True', reject http and https imports used as code, as Text, or
+  --   as Bytes, including integrity-checked cache hits. as Location, local
+  --   files, and env imports are unchanged. Read on each load so a
+  --   configuration change applies without restarting the server.
   } deriving (Eq, Show)
 
 instance Default ServerConfig where
   def = ServerConfig
     { chosenCharacterSet = AutoInferCharSet
     , maxOutputSize = defaultOutputBytes
+    , noRemote = False
     }
 
 -- We need to derive the FromJSON instance manually in order to provide defaults
@@ -80,6 +86,7 @@ instance FromJSON ServerConfig where
         flip (withObject "vscode-dhall-lsp-server") section $ \o -> ServerConfig
           <$> o .:? "character-set" .!= AutoInferCharSet
           <*> o .:? "maxOutputSize" .!= defaultOutputBytes
+          <*> o .:? "noRemote" .!= False
 
 data ServerState = ServerState
   { _importCache :: IORef Cache

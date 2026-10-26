@@ -6,6 +6,7 @@ module Main where
 import Control.Applicative (optional, (<|>))
 import Control.Exception   (SomeException)
 import Data.Version        (showVersion)
+import Dhall.Import        (RemoteImportMode (..))
 import Options.Applicative (Parser, ParserInfo)
 
 import qualified Control.Exception
@@ -24,6 +25,7 @@ data Options
         { explain                   :: Bool
         , file                      :: Maybe FilePath
         , output                    :: Maybe FilePath
+        , remoteImportMode          :: RemoteImportMode
         }
     | Version
 
@@ -33,6 +35,7 @@ parseOptions =
         <$> parseExplain
         <*> optional parseFile
         <*> optional parseOutput
+        <*> parseNoRemote
         )
     <|> parseVersion
   where
@@ -65,6 +68,13 @@ parseOptions =
             <>  Options.action "file"
             )
 
+    parseNoRemote =
+        fmap (\noRemote -> if noRemote then RejectRemoteImports else AllowRemoteImports)
+            (Options.switch
+                (   Options.long "no-remote"
+                <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                ))
+
 parserInfo :: ParserInfo Options
 parserInfo =
     Options.info
@@ -90,7 +100,7 @@ main = do
                     Nothing   -> Data.Text.IO.getContents
                     Just path -> Data.Text.IO.readFile path
 
-                csv <- explaining $ Dhall.Csv.codeToValue file text
+                csv <- explaining $ Dhall.Csv.codeToValue remoteImportMode file text
 
                 let write =
                         case output of

@@ -62,6 +62,9 @@ Each `dhall-import:` view is also written under `$XDG_CACHE_HOME/dhall-lsp/sourc
 - **Output size&nbsp;**
 `vscode-dhall-lsp-server.maxOutputSize` is the maximum rendered size of a normal form the server will show, in bytes. The default is 16384 (16KiB). It does not change ordinary evaluation outside the server.
 
+- **Remote imports&nbsp;**
+`vscode-dhall-lsp-server.noRemote`, default `false`, rejects http and https imports used as code, as Text, or as Bytes, including integrity-checked cache hits. as Location, local files, and env imports are unchanged. Diagnostics, hover, completion, and freeze-import read the setting on each request.
+
 - **Clickable imports&nbsp;**
 Local and remote imports are underlined and clickable. If the buffer has a syntax error, the links come from the last successful parse, the same fallback navigation uses. A parse failure is not logged as a document-link error.
 

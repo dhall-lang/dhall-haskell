@@ -37,7 +37,22 @@ let
 
     haskell = pkgsOld.haskell // {
       packages = pkgsOld.haskell.packages // {
-        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
+        # GHC's FP_GCC_VERSION treats `emcc` as GCC because `emcc --version`
+        # contains "gcc", then parses `emcc -v`. Emscripten 5's banner has no
+        # "version " token, so the parsed version is empty and configure
+        # errors with "Need at least gcc version 4.7". The same check is in
+        # GHC 9.6 through 9.14. Preset the autoconf cache; this Clang has the
+        # __atomic builtins the check is guarding. GccVersion is only printed
+        # afterwards. 4.7 is the minimum that passes.
+        "${compiler}" = (pkgsOld.haskell.packages."${compiler}".override (
+          pkgsNew.lib.optionalAttrs pkgsNew.stdenv.hostPlatform.isGhcjs {
+            ghc = pkgsNew.buildPackages.haskell.compiler.ghc967.overrideAttrs (old: {
+              preConfigure = (old.preConfigure or "") + ''
+                export fp_cv_gcc_version=4.7
+              '';
+            });
+          }
+        )).override (old: {
           overrides =
             pkgsNew.lib.composeExtensions
               (old.overrides or (_: _: {}))
@@ -141,4 +156,16 @@ in
 
     # Cross .env shells are awkward; this at least exposes the compiler.
     shell-dhall-try = hpkgs.dhall-try.env;
+
+    # CI garbage-collects the Nix store before saving it, and keeps only GC
+    # roots. `nix-build -A dhall-try` roots the interpreter, which does not
+    # reference the cross compiler. GitHub does not update a cache key once
+    # it exists, so the compiler has to be in that first save or a later
+    # source change rebuilds it and the rebuild is discarded.
+    # The output file names the compiler store path. GHC's lib/settings
+    # points at emcc, so Emscripten stays in the closure too.
+    cache-roots = pkgs.runCommand "dhall-try-cache-roots" { } ''
+      mkdir -p "$out"
+      printf '%s\n' ${hpkgs.ghc} > "$out/ghc"
+    '';
   }

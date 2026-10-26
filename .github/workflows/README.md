@@ -50,21 +50,28 @@ tasty-bench has no native github-action-benchmark parser. The workflow writes
 [`tasty-bench-csv-to-json.py`](../scripts/tasty-bench-csv-to-json.py) maps
 
 ```text
-Name,Mean (ps),2*Stdev (ps)
-All.large3.evaluation,30000000000000,1200000000000
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+All.large3.evaluation,30000000000000,1200000000000,1000,0,4096
 ```
 
-to `customSmallerIsBetter` JSON (picoseconds → milliseconds, strip a leading
-`All.`):
+The memory columns are present because the workflow runs the executable with
+`+RTS -T`. Time is stored as milliseconds, with a leading `All.` removed.
+Memory is stored as extra rows, in bytes, because each chart point holds one
+number:
 
 ```json
-[{"name": "large3.evaluation", "unit": "ms", "value": 30000, "range": "1200"}]
+[
+  {"name": "large3.evaluation", "unit": "ms", "value": 30000, "range": "1200"},
+  {"name": "large3.evaluation.allocated", "unit": "bytes", "value": 1000},
+  {"name": "large3.evaluation.copied", "unit": "bytes", "value": 0},
+  {"name": "large3.evaluation.peak", "unit": "bytes", "value": 4096}
+]
 ```
 
 ### Local equivalent
 
 ```sh
-stack bench dhall:evaluation --benchmark-arguments '--csv evaluation.csv'
+stack bench dhall:evaluation --benchmark-arguments '--csv evaluation.csv +RTS -T -RTS'
 python3 .github/scripts/tasty-bench-csv-to-json.py evaluation.csv -o bench.json
 ```
 
