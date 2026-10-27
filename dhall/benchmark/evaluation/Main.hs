@@ -27,7 +27,6 @@ import Test.Tasty.Bench (defaultMain)
 import Bench.Common (patternFromArgs, say)
 import qualified Bench.ImportOverhead as ImportOverhead
 import qualified Bench.ImportTrees as ImportTrees
-import qualified Bench.Semisemantic as Semisemantic
 import qualified Bench.Substitutions as Substitutions
 
 -- Prep uses disk caches for Mode A validity + phase benches; Mode B/D fixtures
@@ -47,13 +46,10 @@ main = do
     -- files). Substitutions.benchmarks holds that lifetime.
     Substitutions.benchmarks mPattern $ \substitutionBenches ->
         ImportOverhead.benchmarks mPattern $ \overheadBenches -> do
-            semisemanticBenches <- Semisemantic.benchmarks mPattern
-
             say "Starting tasty-bench…"
 
             defaultMain $ concat
                 [ importTreeBenches
                 , substitutionBenches
                 , overheadBenches
-                , semisemanticBenches
                 ]

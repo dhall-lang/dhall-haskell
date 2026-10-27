@@ -208,16 +208,15 @@ It is not a hash of the fully copied expression. Changing a child changes the
 child's hash, which changes the parent's key. `computeMerkleSemisemanticHash`
 builds it.
 
-The stored payload is one of three shapes, told apart by a leading byte:
+The stored payload is one of two shapes, told apart by a leading byte:
 
 | Byte | What is stored | What a later run does with it |
 | --- | --- | --- |
-| 0 | An old, small, fully simplified expression | Decode it and use it as already simplified. Ignored when a custom simplifier is set, because that old value was produced by the built-in simplifier. |
 | 1 | Nothing but "this file type-checks" | Compute the type from the children, write the type back when it is available, and build the value from the children. |
 | 3 | The inferred type | Restore that type and build the value from the children. The value itself is not what was stored. |
 
 New writes use byte 3 when the type was inferred, and byte 1 when it was not.
-Byte 0 is only read, so that caches written by older versions still work.
+Any other leading byte, including a missing file, is a miss.
 
 The load of an ordinary code file, in `loadImportWithSemisemanticCache`, is:
 
@@ -230,12 +229,11 @@ The load of an ordinary code file, in `loadImportWithSemisemanticCache`, is:
    or it pulled in a placeholder from an earlier failure, do not type-check
     or cache it. Replace it with a placeholder. The errors are already listed.
 4. Compute the cache key and look in `dhall-haskell-v2/`.
-5. On a byte-3 hit, restore the type and build the value (section 7). On a
+5. On a byte-3 hit, restore the type and build the value (section 6). On a
 
    byte-1 hit, or a byte-3 entry that does not decode, infer the type from
-    the children and write a fresh entry. On a byte-0 hit, with no custom
-    simplifier, return the decoded value.
-6. On a miss, a corrupt entry, or a byte-0 entry under a custom simplifier:
+    the children and write a fresh entry.
+6. On a miss or a corrupt entry:
    - If the file is only a single import, reuse that child's type. The child
     was loaded in step 2.
    - Otherwise type-check this file from its children's types (section 8).

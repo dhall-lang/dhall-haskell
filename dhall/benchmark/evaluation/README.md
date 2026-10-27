@@ -13,7 +13,6 @@ in each subdirectory (`large3/`, `large6/`, etc.).
 cd dhall && stack bench evaluation
 stack bench evaluation --ba '--pattern large6'
 stack bench evaluation --ba '--pattern prelude_import'
-stack bench evaluation --ba '--pattern semisemantic.nf_size_walk'
 stack bench evaluation --ba '--list-tests --pattern large3'
 ```
 
@@ -215,7 +214,6 @@ read `evaluation` (or cold `dhall hash`).
 | `substitutions.composer_proxy.*` | generated at prep | D | Flat wide-record imports + large sub map; cold resolve→typecheck→NF (Mode D) |
 | `substitutions.composer_proxy.many_imports.*` | generated at prep | D+E | Overlapping hashed-leaf graph; cold and warm end-to-end |
 | `substitutions.shift_cost.*` | in-harness | pure `nf` | Naive `Map.map shift` walker vs `substituteManyFromRoot` |
-| `semisemantic.nf_size_walk.*` | in-harness | pure `nf` | Full NF size walk vs early abort at 64KiB (shows the store-NF cutoff) |
 
 See `large6/README.md` for the full per-variant matrix. See
 `substitutions/README.md` for the substitution probe (uses
@@ -226,15 +224,15 @@ See `large6/README.md` for the full per-variant matrix. See
 | Cache | Directory | `resolve` bench | `resolve_cold_cache_on` |
 |-------|-----------|-----------------|-------------------------|
 | Semantic (integrity-hash products) | `dhall/` | Off (`IgnoreSemanticCache`) | On |
-| Semisemantic v2 (merkle key → small NF or well-typed marker) | `dhall-haskell-v2/` | **On** (warmed by prep in Mode A) | On (fresh dir) |
+| Semisemantic v2 (merkle key → inferred type or well-typed marker) | `dhall-haskell-v2/` | **On** (warmed by prep in Mode A) | On (fresh dir) |
 
 Unhashed Code imports key the semisemantic cache by a **merkle hash** of the
 local denoted AST with child edge hashes (plus starting-context /
 substitution fingerprints), not by CBOR of the fully substituted tree. The
-payload is either a small CBOR normal form (skip typecheck + normalize on hit)
-or a well-typed marker (skip typecheck only; normalize the in-memory tree).
-Large normal forms are never written. Legacy `dhall-haskell/` entries are
-ignored.
+payload is the inferred type (skip typecheck on hit, then rebuild the value
+from the children) or a well-typed marker (infer the type from the children
+and rewrite the entry). Normalization is not stored. Legacy `dhall-haskell/`
+entries are ignored.
 
 `dhall --no-cache` disables only the semantic cache, not semisemantic. That is
 why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
@@ -247,7 +245,6 @@ why Mode A `resolve` can be much faster than a true cold CLI run (e.g. large3
 | Code `large6` normalize/multi at ~μs | Fixed — use `resolve_cold_cache_on` rows |
 | Source `large6` normalize/multi resolve ~1–8 ms | Semisemantic hit after prep; cost on **evaluation** |
 | `large3.get_config.*` evaluation ~160 μs | Tiny NF after huge resolve |
-| Early-abort NF size walk does not move import groups | The cutoff only runs on a **cold miss** of a **many-node** NF. Mode A resolve is cache-warm; substitutions NFs are tiny; a large `Text` payload is O(1) length. Use `semisemantic.nf_size_walk` (full vs early_abort). |
 
 ## Related docs
 

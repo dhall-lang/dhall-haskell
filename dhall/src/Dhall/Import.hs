@@ -117,9 +117,6 @@ module Dhall.Import (
     , localToPath
     , hashExpression
     , hashExpressionToCode
-    , estimateExprSize
-    , exceedsNFSizeThreshold
-    , semisemanticNFSizeThreshold
     , writeExpressionToSemanticCache
     , assertNoImports
     , Manager
@@ -207,7 +204,7 @@ import Control.Monad.State.Strict (MonadState, StateT)
 import Data.ByteString            (ByteString)
 import Data.IORef                 (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.List.NonEmpty         (NonEmpty (..), nonEmpty)
-import Data.Maybe                 (fromMaybe, isJust, isNothing)
+import Data.Maybe                 (fromMaybe)
 import Data.Text                  (Text)
 import Data.Typeable              (Typeable)
 import Data.Void                  (Void, absurd)
@@ -258,7 +255,6 @@ import qualified Control.Monad.State.Strict                  as State
 import qualified Control.Monad.Trans.Maybe                   as Maybe
 import qualified Data.ByteString
 import qualified Data.ByteString.Lazy
-import qualified Data.Functor.Const                          as FunctorConst
 import qualified Data.IntMap.Lazy                            as LazyIntMap
 import qualified Data.List.NonEmpty                          as NonEmpty
 import qualified Data.Map                                     as Map
@@ -1405,10 +1401,10 @@ cachedImportType chained ImportSemantics { importSemantics = sem } = do
 --
 -- For Code imports without an integrity hash, the cache key is a hash of this
 -- file's syntax plus hashes of the files it imports (see
--- 'computeMerkleSemisemanticHash'). A hit is either a small normal form from an
--- older cache entry or a one-byte "already type-checked" marker. New delayed
--- Code entries use the marker so cache hits and misses both return
--- 'TypecheckedOnly'.
+-- 'computeMerkleSemisemanticHash'). A hit is the inferred type (tag 3) or a
+-- one-byte "already type-checked" marker (tag 1). Both return
+-- 'TypecheckedOnly'. A tag-1 hit infers the type from the children and
+-- rewrites the entry as tag 3 when that type is available.
 --
 -- Those entries live under @dhall-haskell-v2/@, not the older
 -- @dhall-haskell/@ directory, because the keys and stored values are not
@@ -1479,22 +1475,7 @@ loadImportWithSemisemanticCache
                 zoom cacheWarning
                     (fetchFromSemisemanticCache _reportWarning semisemanticHash)
 
-            let hasCustomNormalizer = isJust _normalizer
-
             importSemantics0 <- case mCached of
-                Just (SemisemanticCachedNF bytesStrict)
-                    | not hasCustomNormalizer -> do
-                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-
-                    case Dhall.Binary.decodeExpression bytesLazy of
-                        Left err  -> throwMissingImport (Imported _stack err)
-                        Right sem -> return
-                            ( LoadOk ImportSemantics
-                                { importSemantics = sem
-                                , importNormalizationStatus = AlreadyNormalized
-                                }
-                            )
-
                 Just (SemisemanticCachedType bytesStrict) -> do
                     case decodeCachedType bytesStrict of
                         Nothing ->
@@ -1517,7 +1498,7 @@ loadImportWithSemisemanticCache
                         resolvedExpr
                         twinExpr
 
-                -- Missing, corrupt, or NF payload under a custom normalizer: miss path.
+                -- Missing, corrupt, or unrecognized payload: miss path.
                 _ -> do
                     substitutedExpr <-
                         applyStatusSubstitutions
@@ -1630,73 +1611,11 @@ loadImportWithSemisemanticCache import_@(Chained (Import (ImportHashed _ importT
             }
         )
 
--- | Legacy threshold for older semisemantic NF payloads and tests. The delayed
--- normalization path writes typed markers for new Code entries.
-semisemanticNFSizeThreshold :: Int
-semisemanticNFSizeThreshold = 64 * 1024
-
--- | Full-tree size estimate: AST nodes plus 'Text' / 'Bytes' payloads. Does
--- not CBOR-encode. Used as the naive baseline for size-walk tests.
-estimateExprSize :: Expr s a -> Int
-estimateExprSize expression =
-    case expression of
-        TextLit (Chunks xys z) ->
-            1
-          + Text.length z
-          + sum [ Text.length t + estimateExprSize x | (t, x) <- xys ]
-        BytesLit bytes ->
-            1 + Data.ByteString.length bytes
-        Embed _ ->
-            1
-        _ ->
-            let FunctorConst.Const childSizes =
-                    Syntax.subExpressions
-                        (\child -> FunctorConst.Const [estimateExprSize child])
-                        expression
-            in  1 + sum childSizes
-
--- | 'True' when the expression's estimated size is strictly greater than
--- 'semisemanticNFSizeThreshold'. Same metric as 'estimateExprSize', but
--- aborts as soon as the remaining budget is exhausted so giant NFs are not
--- fully traversed.
-exceedsNFSizeThreshold :: Expr s a -> Bool
-exceedsNFSizeThreshold expression =
-    isNothing (spend semisemanticNFSizeThreshold expression)
-  where
-    debit budget cost
-        | budget < cost = Nothing
-        | otherwise     = Just (budget - cost)
-
-    spend budget _
-        | budget <= 0 =
-            Nothing
-    spend budget (TextLit (Chunks xys z)) = do
-        b0 <- debit budget (1 + Text.length z)
-        foldM
-            (\b (t, x) -> debit b (Text.length t) >>= (`spend` x))
-            b0
-            xys
-    spend budget (BytesLit bytes) =
-        debit budget (1 + Data.ByteString.length bytes)
-    spend budget (Embed _) =
-        debit budget 1
-    spend budget expr = do
-        b0 <- debit budget 1
-        let FunctorConst.Const kids =
-                Syntax.subExpressions
-                    (\child -> FunctorConst.Const [child])
-                    expr
-        foldM spend b0 kids
-
 data SemisemanticPayload
-    = SemisemanticCachedNF Data.ByteString.ByteString
-    | SemisemanticWellTyped
+    = SemisemanticWellTyped
     -- ^ Tag 1.  The file type-checks, and the type is not in the entry.
     | SemisemanticCachedType Data.ByteString.ByteString
     -- ^ Tag 3.  CBOR of the denoted inferred type.  Tag 1 entries still decode.
-
-semisemanticNFTag :: Data.ByteString.ByteString
-semisemanticNFTag = Data.ByteString.singleton 0
 
 semisemanticTypedTag :: Data.ByteString.ByteString
 semisemanticTypedTag = Data.ByteString.singleton 1
@@ -1705,8 +1624,6 @@ semisemanticTypeTag :: Data.ByteString.ByteString
 semisemanticTypeTag = Data.ByteString.singleton 3
 
 encodeSemisemanticPayload :: SemisemanticPayload -> Data.ByteString.ByteString
-encodeSemisemanticPayload (SemisemanticCachedNF bytes) =
-    semisemanticNFTag <> bytes
 encodeSemisemanticPayload SemisemanticWellTyped =
     semisemanticTypedTag
 encodeSemisemanticPayload (SemisemanticCachedType bytes) =
@@ -1716,8 +1633,6 @@ decodeSemisemanticPayload
     :: Data.ByteString.ByteString -> Maybe SemisemanticPayload
 decodeSemisemanticPayload bytes =
     case Data.ByteString.uncons bytes of
-        Just (0, rest) ->
-            Just (SemisemanticCachedNF rest)
         Just (1, rest)
             | Data.ByteString.null rest ->
                 Just SemisemanticWellTyped
