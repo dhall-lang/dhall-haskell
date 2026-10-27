@@ -64,9 +64,9 @@
 * Faster disk cache for local imports without integrity checks. Cache keys
   hash this file's syntax plus hashes of its imports, instead of hashing the
   fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed
-  with older `dhall-haskell/` files. Small results store a normal form; large
-  ones store only an "already type-checked" marker. Starting-context and
-  substitution hashes are computed once per import run.
+  with older `dhall-haskell/` files. Entries store the inferred type, or a
+  one-byte "already type-checked" marker when the type is not available.
+  Starting-context and substitution hashes are computed once per import run.
 * Fast-path `shiftSubstitutions` when a binder cannot capture a substitution,
   and cache the resolved substitution map once per import run on `Status`.
 

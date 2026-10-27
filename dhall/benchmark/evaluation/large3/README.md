@@ -23,7 +23,7 @@ imports `Render`, so import resolution walks the full package graph either way.
 the expensive resolve.
 
 Semisemantic entries live under `~/.cache/dhall-haskell-v2/` (merkle key →
-small NF or well-typed marker). Giant NFs are not written.
+inferred type or well-typed marker). The normal form is not stored.
 
 Bench resolve is **not** fully cold: prep warms semisemantic cache, so re-resolve
 is faster than CLI with empty cache. 

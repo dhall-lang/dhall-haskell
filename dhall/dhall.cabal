@@ -560,7 +560,6 @@ Benchmark evaluation
         Bench.Common
         Bench.ImportOverhead
         Bench.ImportTrees
-        Bench.Semisemantic
         Bench.Substitutions
     Build-Depends:
         dhall                                         ,
