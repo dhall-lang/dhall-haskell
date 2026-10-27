@@ -1,3 +1,54 @@
+<!--
+CI benchmark history
+
+This page draws the benchmark history published on the gh-pages branch as
+dev/bench/data.js. Keep this file in that same directory and open it in a
+browser. A script tag loads data.js, which assigns the history to
+window.BENCHMARK_DATA. That works when the page is opened as a local file.
+
+Data. BENCHMARK_DATA.entries maps a suite name (the github-action-benchmark
+name, here "dhall") to a list of runs, oldest first. Each run has a commit
+(id, timestamp, message, url) and a list of benches. A timing bench has
+name, unit "ms", value (the mean), and range. range is twice the standard
+deviation in milliseconds: tasty-bench writes a "2*Stdev (ps)" column, and
+.github/scripts/tasty-bench-csv-to-json.py divides it by 1e9. With +RTS -T
+the same script also emits extra benches for one measurement:
+
+  <name>.allocated    bytes allocated
+  <name>.copied       bytes copied by the GC
+  <name>.peak         peak memory
+
+The page uses the timing bench and the .allocated bench. Rows whose names
+end in .copied or .peak are skipped, so those series never become graphs.
+
+What a graph shows. One row per measurement, titled suite/name. Time is a
+straight line with markers and error bars of plus or minus range (twice the
+standard deviation). The area under the line is empty. When .allocated
+exists for that measurement, a second graph on the same row shows it in
+megabytes (bytes divided by 1024*1024). The x positions are integers, and
+the labels are 7-character commit hashes, so a hash such as 376566e3 is
+not read as a number. Every commit in the window is a point. Tick labels
+are thinned to the count that fits the chart width, and the first and last
+hash stay. Hover text is the commit subject, timestamp, and the error bar.
+Clicking a point opens commit.url in a new tab.
+
+Commit window. "Max number of commits shown" keeps the most recent 5, 10,
+25, 50, 100, 200, or every commit. The default is 50. Commits are ordered
+by timestamp, and the window is the slice at the right-hand end. Changing
+the dropdown rebuilds the list and discards charts that were on screen.
+
+Search. The box is a case-insensitive regular expression tested against
+the row title. An invalid pattern hides every row and shows "Invalid regex".
+
+Drawing. The list of titles is built immediately. Plotly 2.35.2 is loaded
+from the jsDelivr CDN the first time a row needs a chart. An
+IntersectionObserver watches each row, with a margin of 400px so a graph
+starts just before it scrolls into view. Rows already on screen are drawn
+one at a time, and the row shows "Drawing…" while its charts are created.
+A chart that scrolls out of that margin is destroyed, so the page keeps
+only the graphs you can see. Resizing the window recomputes tick labels
+only for charts that are currently drawn.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,6 +95,11 @@
     #search-error.visible {
       display: block;
     }
+    #list-status {
+      margin: 12px 0 0;
+      font-size: 14px;
+      color: #333;
+    }
     #missing-data {
       width: 80%;
       max-width: 960px;
@@ -51,7 +107,7 @@
     }
     .benchmark-row {
       width: 96%;
-      margin: 0 auto 32px;
+      margin: 0 auto 20px;
     }
     .plot-pair {
       display: flex;
@@ -71,6 +127,11 @@
       margin: 0 0 4px;
       user-select: text;
     }
+    .draw-status {
+      text-align: center;
+      margin: 8px 0;
+      color: #333;
+    }
     .plotly-chart {
       width: 100%;
       min-height: 450px;
@@ -85,14 +146,15 @@
         <option value="5">5</option>
         <option value="10">10</option>
         <option value="25">25</option>
-        <option value="50">50</option>
+        <option value="50" selected>50</option>
         <option value="100">100</option>
         <option value="200">200</option>
-        <option value="all" selected>all</option>
+        <option value="all">all</option>
       </select>
     </label>
     <input id="search-box" type="search" placeholder="Search by plot title (regex)">
     <div id="search-error">Invalid regex</div>
+    <p id="list-status"></p>
   </div>
   <p id="missing-data" hidden>
     This page reads <code>data.js</code> from the same directory. Copy it next to
@@ -100,13 +162,27 @@
   </p>
   <div id="plots"></div>
   <script src="data.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.35.2/dist/plotly.min.js"></script>
   <script>
-    const MEMORY_SUFFIX = ".allocated";
+    const ALLOCATED_SUFFIX = ".allocated";
+    const IGNORED_SUFFIXES = [".copied", ".peak"];
     const BYTES_TO_MB = 1 / (1024 * 1024);
+    const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js@2.35.2/dist/plotly.min.js";
+
+    const rowPayload = new WeakMap();
+    const chartLabels = new WeakMap();
+    let renderGeneration = 0;
+    let plotlyPromise = null;
+    let rowObserver = null;
+    let drawPumpRunning = false;
 
     function shortHash(commitId) {
       return commitId.slice(0, 7);
+    }
+
+    function ignoredName(name) {
+      return IGNORED_SUFFIXES.some(function (suffix) {
+        return name.endsWith(suffix);
+      });
     }
 
     function collect(data) {
@@ -121,7 +197,7 @@
             commits.push(commit);
           }
           for (const bench of run.benches || []) {
-            if (!bench.name || !commit.id) {
+            if (!bench.name || !commit.id || ignoredName(bench.name)) {
               continue;
             }
             const key = suite + "\0" + bench.name;
@@ -141,8 +217,8 @@
         const splitAt = key.indexOf("\0");
         const suite = key.slice(0, splitAt);
         const name = key.slice(splitAt + 1);
-        const base = name.endsWith(MEMORY_SUFFIX)
-          ? name.slice(0, -MEMORY_SUFFIX.length)
+        const base = name.endsWith(ALLOCATED_SUFFIX)
+          ? name.slice(0, -ALLOCATED_SUFFIX.length)
           : name;
         names.add(suite + "\0" + base);
       }
@@ -226,9 +302,10 @@
       };
     }
 
-    const chartLabels = new WeakMap();
-
     function updateVisibleTicks() {
+      if (!window.Plotly) {
+        return;
+      }
       document.querySelectorAll(".plotly-chart").forEach(function (chart) {
         const labels = chartLabels.get(chart);
         if (!labels || !chart.clientWidth) {
@@ -248,7 +325,9 @@
     }
 
     function plotSpec(labels, values, errors, customdata, yTitle, unit, width) {
-      const xValues = labels.map((_, index) => index);
+      const xValues = labels.map(function (_, index) {
+        return index;
+      });
       const trace = {
         type: "scatter",
         mode: "lines+markers",
@@ -274,10 +353,247 @@
       };
     }
 
+    function seriesForRow(series, shownCommits, suite, name) {
+      const timePoints = series.get(suite + "\0" + name) || new Map();
+      const allocPoints = series.get(suite + "\0" + name + ALLOCATED_SUFFIX) || new Map();
+      const present = shownCommits.filter(function (commit) {
+        return timePoints.has(commit.id) || allocPoints.has(commit.id);
+      });
+      if (present.length === 0) {
+        return null;
+      }
+
+      const labels = [];
+      const means = [];
+      const errors = [];
+      const timeCustom = [];
+      const allocated = [];
+      const allocCustom = [];
+      let sawError = false;
+
+      for (const commit of present) {
+        labels.push(shortHash(commit.id));
+        const bench = timePoints.get(commit.id);
+        if (!bench) {
+          means.push(null);
+          errors.push(0);
+          timeCustom.push(hoverData(commit, null, "ms"));
+        } else {
+          means.push(Number(bench.value));
+          const rawRange = bench.range;
+          if (rawRange == null || String(rawRange).trim() === "") {
+            errors.push(0);
+            timeCustom.push(hoverData(commit, null, "ms"));
+          } else {
+            const error = Number(rawRange);
+            errors.push(error);
+            sawError = true;
+            timeCustom.push(hoverData(commit, error, "ms"));
+          }
+        }
+        const alloc = allocPoints.get(commit.id);
+        if (!alloc) {
+          allocated.push(null);
+          allocCustom.push(hoverData(commit, null, "MB"));
+        } else {
+          allocated.push(Number(alloc.value) * BYTES_TO_MB);
+          allocCustom.push(hoverData(commit, null, "MB"));
+        }
+      }
+
+      const charts = [
+        { values: means, errors: sawError ? errors : null, custom: timeCustom, yTitle: "Time (ms)", unit: "ms" },
+      ];
+      if (allocated.some(function (value) {
+        return value != null;
+      })) {
+        charts.push({ values: allocated, errors: null, custom: allocCustom, yTitle: "Allocated (MB)", unit: "MB" });
+      }
+      return { labels: labels, charts: charts };
+    }
+
+    function ensurePlotly() {
+      if (window.Plotly) {
+        return Promise.resolve();
+      }
+      if (!plotlyPromise) {
+        document.getElementById("list-status").textContent = "Loading chart library…";
+        plotlyPromise = new Promise(function (resolve, reject) {
+          const script = document.createElement("script");
+          script.src = PLOTLY_URL;
+          script.onload = function () {
+            updateListStatus();
+            resolve();
+          };
+          script.onerror = function () {
+            plotlyPromise = null;
+            document.getElementById("list-status").textContent = "Could not load the chart library.";
+            reject(new Error("plotly"));
+          };
+          document.head.appendChild(script);
+        });
+      }
+      return plotlyPromise;
+    }
+
+    function closeRow(row) {
+      row.querySelectorAll(".plotly-chart").forEach(function (chart) {
+        if (window.Plotly) {
+          Plotly.purge(chart);
+        }
+      });
+      const pair = row.querySelector(".plot-pair");
+      pair.replaceChildren();
+      pair.hidden = true;
+      const status = row.querySelector(".draw-status");
+      status.hidden = true;
+      status.textContent = "";
+      row.dataset.state = "closed";
+    }
+
+    function drawRow(row) {
+      const generation = renderGeneration;
+      const payload = rowPayload.get(row);
+      if (!payload) {
+        return Promise.resolve();
+      }
+      row.dataset.state = "drawing";
+      const status = row.querySelector(".draw-status");
+      status.hidden = false;
+      status.textContent = "Drawing…";
+      const pair = row.querySelector(".plot-pair");
+      pair.hidden = false;
+      pair.replaceChildren();
+
+      const slots = payload.charts.map(function () {
+        const holder = document.createElement("div");
+        holder.className = "benchmark-plot";
+        const chart = document.createElement("div");
+        chart.className = "plotly-chart";
+        holder.appendChild(chart);
+        pair.appendChild(holder);
+        return chart;
+      });
+
+      return ensurePlotly().then(function () {
+        if (generation !== renderGeneration || row.dataset.state !== "drawing" || row.dataset.wanted !== "1") {
+          return;
+        }
+        return new Promise(function (resolve) {
+          requestAnimationFrame(function () {
+            if (generation !== renderGeneration || row.dataset.state !== "drawing" || row.dataset.wanted !== "1") {
+              resolve();
+              return;
+            }
+            const jobs = slots.map(function (chart, index) {
+              const spec = payload.charts[index];
+              const width = chart.clientWidth || chart.parentElement.clientWidth;
+              const plot = plotSpec(payload.labels, spec.values, spec.errors, spec.custom, spec.yTitle, spec.unit, width);
+              chartLabels.set(chart, payload.labels);
+              chart.dataset.ticks = plot.layout.xaxis.tickvals.join(",");
+              return Plotly.newPlot(chart, plot.data, plot.layout, { responsive: true, displayModeBar: true })
+                .then(function (ready) {
+                  ready.on("plotly_click", function (event) {
+                    const point = event.points && event.points[0];
+                    const url = point && point.customdata && point.customdata[3];
+                    if (url) {
+                      window.open(url, "_blank");
+                    }
+                  });
+                });
+            });
+            Promise.all(jobs).then(function () {
+              if (generation !== renderGeneration || row.dataset.state !== "drawing" || row.dataset.wanted !== "1") {
+                resolve();
+                return;
+              }
+              status.hidden = true;
+              row.dataset.state = "open";
+              requestAnimationFrame(updateVisibleTicks);
+              resolve();
+            });
+          });
+        });
+      }).catch(function () {
+        if (generation !== renderGeneration) {
+          return;
+        }
+        status.hidden = false;
+        status.textContent = "Could not draw this graph.";
+        row.dataset.state = "closed";
+      });
+    }
+
+    function onRowIntersection(entries) {
+      entries.forEach(function (entry) {
+        const row = entry.target;
+        const visible = entry.isIntersecting && row.style.display !== "none";
+        row.dataset.wanted = visible ? "1" : "0";
+        if (!visible && row.dataset.state !== "closed") {
+          closeRow(row);
+        }
+      });
+      pumpDraws();
+    }
+
+    function pumpDraws() {
+      if (drawPumpRunning) {
+        return;
+      }
+      const next = document.querySelector('.benchmark-row[data-wanted="1"][data-state="closed"]');
+      if (!next || next.style.display === "none") {
+        return;
+      }
+      drawPumpRunning = true;
+      const generation = renderGeneration;
+      drawRow(next).finally(function () {
+        if (generation !== renderGeneration) {
+          return;
+        }
+        drawPumpRunning = false;
+        pumpDraws();
+      });
+    }
+
+    function observeRows() {
+      if (rowObserver) {
+        rowObserver.disconnect();
+      }
+      rowObserver = new IntersectionObserver(onRowIntersection, {
+        root: null,
+        rootMargin: "400px 0px",
+        threshold: 0,
+      });
+      document.querySelectorAll(".benchmark-row").forEach(function (row) {
+        rowObserver.observe(row);
+      });
+    }
+
+    function updateListStatus() {
+      const rows = document.querySelectorAll(".benchmark-row");
+      const visible = Array.from(rows).filter(function (row) {
+        return row.style.display !== "none";
+      }).length;
+      const status = document.getElementById("list-status");
+      if (document.getElementById("search-box").classList.contains("invalid")) {
+        status.textContent = "";
+        return;
+      }
+      if (rows.length === 0) {
+        status.textContent = "No benchmarks in this commit window.";
+        return;
+      }
+      const noun = visible === 1 ? "benchmark" : "benchmarks";
+      status.textContent = visible + " " + noun + ". Graphs appear as they scroll into view.";
+    }
+
     function render() {
+      const generation = ++renderGeneration;
+      drawPumpRunning = false;
       const data = window.BENCHMARK_DATA;
       if (!data || !data.entries) {
         document.getElementById("missing-data").hidden = false;
+        document.getElementById("list-status").textContent = "";
         return;
       }
       const { commits, series } = collect(data);
@@ -286,7 +602,9 @@
       const shownCommits = recentCommits(commits, maxCommits);
       const plots = document.getElementById("plots");
       document.querySelectorAll(".plotly-chart").forEach(function (chart) {
-        Plotly.purge(chart);
+        if (window.Plotly) {
+          Plotly.purge(chart);
+        }
       });
       plots.replaceChildren();
 
@@ -294,97 +612,39 @@
         const splitAt = key.indexOf("\0");
         const suite = key.slice(0, splitAt);
         const name = key.slice(splitAt + 1);
-        const timePoints = series.get(suite + "\0" + name) || new Map();
-        const allocPoints = series.get(suite + "\0" + name + MEMORY_SUFFIX) || new Map();
-        const present = shownCommits.filter((commit) => timePoints.has(commit.id) || allocPoints.has(commit.id));
-        if (present.length === 0) {
+        const payload = seriesForRow(series, shownCommits, suite, name);
+        if (!payload) {
           continue;
-        }
-
-        const labels = [];
-        const means = [];
-        const errors = [];
-        const timeCustom = [];
-        const allocated = [];
-        const allocCustom = [];
-        let sawError = false;
-
-        for (const commit of present) {
-          labels.push(shortHash(commit.id));
-          const bench = timePoints.get(commit.id);
-          if (!bench) {
-            means.push(null);
-            errors.push(0);
-            timeCustom.push(hoverData(commit, null, "ms"));
-          } else {
-            means.push(Number(bench.value));
-            const rawRange = bench.range;
-            if (rawRange == null || String(rawRange).trim() === "") {
-              errors.push(0);
-              timeCustom.push(hoverData(commit, null, "ms"));
-            } else {
-              const error = Number(rawRange);
-              errors.push(error);
-              sawError = true;
-              timeCustom.push(hoverData(commit, error, "ms"));
-            }
-          }
-          const alloc = allocPoints.get(commit.id);
-          if (!alloc) {
-            allocated.push(null);
-            allocCustom.push(hoverData(commit, null, "MB"));
-          } else {
-            allocated.push(Number(alloc.value) * BYTES_TO_MB);
-            allocCustom.push(hoverData(commit, null, "MB"));
-          }
         }
 
         const title = suite + "/" + name;
         const row = document.createElement("div");
         row.className = "benchmark-row";
         row.dataset.title = title;
+        row.dataset.state = "closed";
+        row.dataset.wanted = "0";
+        rowPayload.set(row, payload);
+
         const heading = document.createElement("h2");
         heading.className = "plot-title";
         heading.textContent = title;
+
+        const status = document.createElement("p");
+        status.className = "draw-status";
+        status.hidden = true;
+
         const pair = document.createElement("div");
         pair.className = "plot-pair";
+        pair.hidden = true;
+
         row.appendChild(heading);
+        row.appendChild(status);
         row.appendChild(pair);
         plots.appendChild(row);
+      }
 
-        const drawn = [];
-        for (const spec of [
-          { values: means, errors: sawError ? errors : null, custom: timeCustom, yTitle: "Time (ms)", unit: "ms" },
-          { values: allocated, errors: null, custom: allocCustom, yTitle: "Allocated (MB)", unit: "MB" },
-        ]) {
-          if (spec.unit === "MB" && !allocated.some((value) => value != null)) {
-            continue;
-          }
-          const holder = document.createElement("div");
-          holder.className = "benchmark-plot";
-          const chart = document.createElement("div");
-          chart.className = "plotly-chart";
-          holder.appendChild(chart);
-          pair.appendChild(holder);
-          const plot = plotSpec(labels, spec.values, spec.errors, spec.custom, spec.yTitle, spec.unit, holder.clientWidth);
-          chartLabels.set(chart, labels);
-          chart.dataset.ticks = plot.layout.xaxis.tickvals.join(",");
-          drawn.push(
-            Plotly.newPlot(chart, plot.data, plot.layout, { responsive: true, displayModeBar: true })
-              .then(function (ready) {
-                ready.on("plotly_click", function (event) {
-                  const point = event.points && event.points[0];
-                  const url = point && point.customdata && point.customdata[3];
-                  if (url) {
-                    window.open(url, "_blank");
-                  }
-                });
-              })
-          );
-        }
-        Promise.all(drawn).then(function () {
-          requestAnimationFrame(updateVisibleTicks);
-        });
+      if (generation !== renderGeneration) {
+        return;
       }
       applySearch();
     }
@@ -408,8 +668,17 @@
       document.getElementById("search-error").classList.toggle("visible", invalid);
       document.querySelectorAll(".benchmark-row").forEach(function (row) {
         const title = row.dataset.title;
-        row.style.display = invalid || (regex && !regex.test(title)) ? "none" : "";
+        const hide = invalid || (regex && !regex.test(title));
+        row.style.display = hide ? "none" : "";
+        if (hide) {
+          row.dataset.wanted = "0";
+          if (row.dataset.state !== "closed") {
+            closeRow(row);
+          }
+        }
       });
+      updateListStatus();
+      observeRows();
     }
 
     document.getElementById("search-box").addEventListener("input", applySearch);
