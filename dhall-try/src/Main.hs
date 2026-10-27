@@ -161,7 +161,12 @@ main = do
                                                           setOutput yamlText
 
                                       Hash ->
-                                          setOutput (Dhall.Import.hashExpressionToCode (Dhall.Core.alphaNormalize resolvedExpression))
+                                          setOutput
+                                              (Dhall.Import.hashExpressionToCode
+                                                  (Dhall.Core.alphaNormalize
+                                                      (Dhall.Core.denote resolvedExpression)
+                                                  )
+                                              )
 
     interpret
 
