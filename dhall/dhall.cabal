@@ -565,6 +565,7 @@ Benchmark evaluation
     Main-Is: Main.hs
     Other-Modules:
         Bench.Common
+        Bench.EvalAB
         Bench.GraphMetrics
         Bench.ImportOverhead
         Bench.ImportTrees

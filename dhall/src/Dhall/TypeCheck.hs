@@ -14,6 +14,8 @@ module Dhall.TypeCheck (
     -- * Type-checking
       typeWith
     , typeOf
+    , typeOfWithConfig
+    , typeOfWithStats
     , typeWithA
     , typeWithImports
     , TypingContext
@@ -41,7 +43,7 @@ module Dhall.TypeCheck (
     , ErrorMessages(..)
     ) where
 
-import Control.Exception                 (Exception)
+import Control.Exception                 (Exception, evaluate)
 import Control.Monad.Trans.Class         (lift)
 import Control.Monad.Trans.Writer.Strict (execWriterT, tell)
 import Data.List.NonEmpty                (NonEmpty (..))
@@ -1487,6 +1489,32 @@ infer typer = loop
 -}
 typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
+
+-- | 'typeOf' under an explicit 'EvalConfig'. The default 'typeOf' is unchanged.
+--   Used by the evaluation A/B benchmark; not a behavior change for callers
+--   of 'typeOf'.
+typeOfWithConfig
+    :: EvalConfig
+    -> Expr s X
+    -> Either (TypeError s X) (Expr s X)
+typeOfWithConfig cfg expr =
+    withEvalRun cfg $
+        fmap (Dhall.Core.renote . quoteInRun EmptyNames)
+            (infer absurd (contextToCtx Dhall.Context.empty) expr)
+
+-- | One-shot 'typeOfWithConfig' that also reports 'EvalStats'.
+--   Forces the result before reading counters, so the stats include infer.
+typeOfWithStats
+    :: EvalConfig
+    -> Expr s X
+    -> IO (Either (TypeError s X) (Expr Void X), EvalStats)
+typeOfWithStats cfg expr = withEvalRunIO cfg $ do
+    let result =
+            fmap (Dhall.Core.denote . Dhall.Core.renote . quoteInRun EmptyNames)
+                (infer absurd (contextToCtx Dhall.Context.empty) expr)
+    result' <- evaluate result
+    stats <- readEvalStatsIO
+    return (result', stats)
 
 -- | The specific type error
 data TypeMessage s a
