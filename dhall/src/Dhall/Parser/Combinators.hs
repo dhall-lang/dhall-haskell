@@ -18,6 +18,9 @@ module Dhall.Parser.Combinators
     , satisfy
     , Dhall.Parser.Combinators.takeWhile
     , takeWhile1
+    , spanWhile
+    , spanWhile1
+    , skipChunk
     , toMap
     , toMapWith
     , base
@@ -48,6 +51,15 @@ import qualified Text.Megaparsec.Char
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token.Style
+
+import Text.Megaparsec
+    ( Pos
+    , PosState (..)
+    , SourcePos (..)
+    , State (..)
+    , mkPos
+    , unPos
+    )
 
 -- | An exception annotated with a `Src` span
 data SourcedException e = SourcedException Src e
@@ -260,6 +272,124 @@ takeWhile predicate = Parser (Text.Megaparsec.takeWhileP Nothing predicate)
 --   that match the given predicate. It fails when no character was consumed
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 predicate = Parser (Text.Megaparsec.takeWhile1P Nothing predicate)
+
+-- | Like 'takeWhile', but long runs update 'SourcePos' in bulk.
+--
+-- Short runs (≤ 'bulkSpanThreshold') only bump 'stateOffset', matching
+-- 'takeWhileP', so one-space gaps in real files do not call 'getSourcePos'.
+-- Longer newline-free runs bump the column from 'Data.Text.length' instead of
+-- leaving a later 'getSourcePos' to walk every character.
+spanWhile :: (Char -> Bool) -> Parser Text
+spanWhile predicate = Parser $ do
+    input <- Text.Megaparsec.getInput
+    let (prefix, rest) = Data.Text.span predicate input
+        n              = Data.Text.length prefix
+    if n == 0
+        then pure prefix
+        else
+            let predForbidsBreak = not (predicate '\n' || predicate '\t')
+            in  consumeRun n prefix rest predForbidsBreak *> pure prefix
+
+-- | Like 'spanWhile', but fails if no character was consumed.
+spanWhile1 :: (Char -> Bool) -> Parser Text
+spanWhile1 predicate = do
+    prefix <- spanWhile predicate
+    if Data.Text.null prefix
+        then empty
+        else pure prefix
+
+-- | Drop an exact prefix of the remaining input.
+--
+-- Short prefixes use the same offset-only path as 'spanWhile'; long ones
+-- update source position in bulk.
+skipChunk :: Text -> Parser ()
+skipChunk chunk
+    | Data.Text.null chunk = pure ()
+    | otherwise            = Parser $ do
+        input <- Text.Megaparsec.getInput
+        case Data.Text.stripPrefix chunk input of
+            Nothing   -> fail "skipChunk: prefix mismatch"
+            Just rest -> consumeRun (Data.Text.length chunk) chunk rest False
+
+-- Runs longer than this get a bulk SourcePos update.
+bulkSpanThreshold :: Int
+bulkSpanThreshold = 16
+
+consumeRun
+    :: Int -> Text -> Text -> Bool -> Text.Megaparsec.Parsec Void Text ()
+consumeRun n prefix rest predForbidsBreak
+    | n <= bulkSpanThreshold =
+        Text.Megaparsec.updateParserState (advanceOffset n rest)
+    | otherwise = do
+        _ <- Text.Megaparsec.getSourcePos
+        -- If the predicate cannot match newline or tab, the run is
+        -- newline-free without scanning it.
+        let newlineFree =
+                predForbidsBreak || not (Data.Text.any isBreak prefix)
+        Text.Megaparsec.updateParserState
+            (advanceState n prefix rest newlineFree)
+
+isBreak :: Char -> Bool
+isBreak c = c == '\n' || c == '\t'
+
+advanceOffset
+    :: Int
+    -> Text
+    -> Text.Megaparsec.State Text e
+    -> Text.Megaparsec.State Text e
+advanceOffset n rest st =
+    st
+        { stateInput  = rest
+        , stateOffset = stateOffset st + n
+        }
+
+advanceState
+    :: Int
+    -> Text
+    -> Text
+    -> Bool
+    -> Text.Megaparsec.State Text e
+    -> Text.Megaparsec.State Text e
+advanceState n prefix rest newlineFree st =
+    let offset' = stateOffset st + n
+        pst     = statePosState st
+        tab     = pstateTabWidth pst
+        pos'    = advanceSourcePos tab newlineFree (pstateSourcePos pst) prefix
+        prefix' =
+            if newlineFree || not (Data.Text.any (== '\n') prefix)
+                then pstateLinePrefix pst
+                else ""
+        pst'    = pst
+            { pstateInput      = rest
+            , pstateOffset     = offset'
+            , pstateSourcePos  = pos'
+            , pstateLinePrefix = prefix'
+            }
+    in  st
+            { stateInput    = rest
+            , stateOffset   = offset'
+            , statePosState = pst'
+            }
+
+-- When the consumed run cannot contain newline or tab, bump the column from
+-- Text.length. Do not scan the run with Text.all: that walk is the cost we
+-- are trying to avoid.
+advanceSourcePos :: Pos -> Bool -> SourcePos -> Text -> SourcePos
+advanceSourcePos tabWidth newlineFree pos t
+    | newlineFree =
+        pos { sourceColumn = mkPos (unPos (sourceColumn pos) + Data.Text.length t) }
+    | otherwise =
+        Data.Text.foldl' (advanceOne (unPos tabWidth)) pos t
+
+advanceOne :: Int -> SourcePos -> Char -> SourcePos
+advanceOne tabWidth (SourcePos name line col) c =
+    case c of
+        '\n' -> SourcePos name (mkPos (unPos line + 1)) (mkPos 1)
+        '\t' ->
+            let c0 = unPos col
+                c1 = c0 + tabWidth - ((c0 - 1) `mod` tabWidth)
+            in  SourcePos name line (mkPos c1)
+        _ -> SourcePos name line (mkPos (unPos col + 1))
 
 -- | Creates a map with the given key-value pairs, failing if there was a
 --   duplicate key.

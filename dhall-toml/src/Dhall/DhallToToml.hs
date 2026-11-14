@@ -119,6 +119,7 @@ import Data.Text          (Text)
 import Data.Version       (showVersion)
 import Data.Void          (Void)
 import Dhall.Core         (DhallDouble (..), Expr)
+import Dhall.Import       (RemoteImportMode (..))
 import Dhall.Map          (Map)
 import Dhall.Toml.Utils   (fileToDhall, inputToDhall)
 import Prettyprinter      (Pretty)
@@ -424,6 +425,7 @@ toToml toml pieces expr  = case expr of
 data Options = Options
     { input :: Maybe FilePath
     , output :: Maybe FilePath
+    , remoteImportMode :: RemoteImportMode
     }
 
 parserInfo :: Options.ParserInfo Options
@@ -450,6 +452,17 @@ parserInfo = Options.info
             <> Options.action "file"
             )
 
+        remoteImportMode <-
+            fmap
+                (\noRemote ->
+                    if noRemote then RejectRemoteImports else AllowRemoteImports
+                )
+                (Options.switch
+                    (  Options.long "no-remote"
+                    <> Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                    )
+                )
+
         pure Options{..}
 
 {-| Runs the @dhall-to-toml@ command
@@ -458,7 +471,8 @@ dhallToTomlMain :: IO ()
 dhallToTomlMain = do
     Options{..} <- Options.execParser parserInfo
 
-    resolvedExpression <- maybe inputToDhall fileToDhall input
+    resolvedExpression <-
+        maybe (inputToDhall remoteImportMode) (fileToDhall remoteImportMode) input
 
     toml <- Core.throws (dhallToToml resolvedExpression)
 

@@ -11,6 +11,8 @@
 module Dhall.Repl
     ( -- * Repl
       repl
+    , ReplLimits (..)
+    , noReplLimits
     ) where
 
 import Control.Exception
@@ -23,9 +25,10 @@ import Control.Monad     (forM_)
 import Control.Monad.Fail (MonadFail)
 #endif
 import Control.Monad.IO.Class              (MonadIO, liftIO)
-import Control.Monad.State.Class           (MonadState, get, modify)
+import Control.Monad.State.Class           (MonadState, get, modify, put)
 import Control.Monad.State.Strict          (evalStateT)
 import Data.Char                           (isSpace)
+import Data.Int                            (Int64)
 import Data.List
     ( dropWhileEnd
     , groupBy
@@ -35,7 +38,13 @@ import Data.List
 import Data.Maybe                          (mapMaybe)
 import Data.Text                           (Text)
 import Data.Void                           (Void)
-import Dhall.Context                       (Context)
+import Dhall.Bounded
+    ( Bound (..)
+    , WorkLimit (..)
+    , prettyBounded
+    , runLimited
+    , withAllocationLimit
+    )
 import Dhall.Import                        (hashExpressionToCode)
 import Dhall.Parser                        (Parser (..))
 import Dhall.Pretty                        (CharacterSet (..))
@@ -55,8 +64,8 @@ import qualified Dhall.Context
 import qualified Dhall.Core
 import qualified Dhall.Core                          as Dhall
     ( Expr
+    , Import
     , Var (V)
-    , normalize
     )
 import qualified Dhall.Core                          as Expr (Expr (..))
 import qualified Dhall.Import                        as Dhall
@@ -65,6 +74,7 @@ import qualified Dhall.Parser                        as Dhall
 import qualified Dhall.Parser.Expression             as Parser.Expression
 import qualified Dhall.Pretty
 import qualified Dhall.Pretty.Internal
+import qualified Dhall.Repl.Line                     as Repline
 import qualified Dhall.Syntax                        as Syntax
 import qualified Dhall.TypeCheck                     as Dhall
 import qualified Dhall.Version                       as Meta
@@ -72,7 +82,6 @@ import qualified Prettyprinter                       as Pretty
 import qualified Prettyprinter.Render.Terminal       as Pretty (renderIO)
 import qualified System.Console.ANSI
 import qualified System.Console.Haskeline.Completion as Haskeline
-import qualified System.Console.Repline              as Repline
 import qualified System.IO
 import qualified Text.Megaparsec                     as Megaparsec
 
@@ -84,9 +93,25 @@ import qualified System.Console.Haskeline.MonadException
 
 type Repl = Repline.HaskelineT (State.StateT Env IO)
 
+-- | Resource limits from @dhall repl@ command-line flags.
+data ReplLimits = ReplLimits
+    { replMaxOutputSize     :: Maybe Int
+    , replMaxAllocation     :: Maybe Int64
+    , replMaxEvaluationTime :: Maybe Int
+    }
+
+-- | No limits (the default when flags are omitted).
+noReplLimits :: ReplLimits
+noReplLimits =
+    ReplLimits
+        { replMaxOutputSize = Nothing
+        , replMaxAllocation = Nothing
+        , replMaxEvaluationTime = Nothing
+        }
+
 -- | Implementation of the @dhall repl@ subcommand
-repl :: CharacterSet -> Bool -> IO ()
-repl characterSet explain =
+repl :: CharacterSet -> Bool -> ReplLimits -> Dhall.RemoteImportMode -> IO ()
+repl characterSet explain limits remoteImportMode =
     if explain then Dhall.detailed io else io
   where
     io =
@@ -101,7 +126,12 @@ repl characterSet explain =
             greeter
             finaliser
         )
-        (emptyEnv { characterSet, explain })
+        (emptyEnv
+            { characterSet
+            , explain
+            , replLimits = limits
+            , envRemoteImportMode = remoteImportMode
+            })
 
     banner = pure . \case
       Repline.SingleLine -> turnstile <> " "
@@ -113,11 +143,14 @@ repl characterSet explain =
         ASCII   -> "|-"
 
 data Env = Env
-  { envBindings      :: Dhall.Context.Context Binding
-  , envIt            :: Maybe Binding
-  , explain          :: Bool
-  , characterSet     :: CharacterSet
-  , outputHandle     :: Maybe System.IO.Handle
+  { envBindings          :: Dhall.Context.Context Binding
+  , envContext           :: Dhall.TypingContext Src
+  , envIt                :: Maybe Binding
+  , explain              :: Bool
+  , characterSet         :: CharacterSet
+  , outputHandle         :: Maybe System.IO.Handle
+  , replLimits           :: ReplLimits
+  , envRemoteImportMode  :: Dhall.RemoteImportMode
   }
 
 
@@ -125,10 +158,13 @@ emptyEnv :: Env
 emptyEnv =
   Env
     { envBindings = Dhall.Context.empty
+    , envContext = Dhall.emptyTypingContext
     , envIt = Nothing
     , explain = False
     , characterSet = Unicode
     , outputHandle = Just System.IO.stdout
+    , replLimits = noReplLimits
+    , envRemoteImportMode = Dhall.AllowRemoteImports
     }
 
 
@@ -138,18 +174,8 @@ data Binding = Binding
   }
 
 
-envToContext :: Env -> Dhall.Context.Context Binding
-envToContext Env{ envBindings, envIt } =
-  case envIt of
-    Nothing ->
-      envBindings
-
-    Just it ->
-      Dhall.Context.insert "it" it envBindings
-
-
 parseAndLoad
-  :: MonadIO m => String -> m ( Dhall.Expr Dhall.Src Void) 
+  :: (MonadIO m, MonadState Env m) => String -> m ( Dhall.Expr Dhall.Src Void)
 parseAndLoad src = do
   parsed <-
     case Dhall.exprFromText "(input)" (Text.pack src <> "\n") of
@@ -159,25 +185,74 @@ parseAndLoad src = do
       Right a ->
         return a
 
-  let status = Dhall.emptyStatus "."
+  loadHere parsed
 
-  liftIO ( State.evalStateT (Dhall.loadWith parsed) status )
+-- | Resolve imports using the REPL's remote-import mode.
+loadHere
+    :: (MonadIO m, MonadState Env m)
+    => Dhall.Expr Dhall.Src Dhall.Import
+    -> m (Dhall.Expr Dhall.Src Void)
+loadHere expression = do
+    Env { envRemoteImportMode } <- get
+    let status =
+            (Dhall.emptyStatus ".")
+                { Dhall._remoteImportMode = envRemoteImportMode }
+    liftIO (State.evalStateT (Dhall.loadWith expression) status)
 
 
 eval :: ( MonadIO m, MonadState Env m ) => String -> m ()
 eval src = do
+  env <- get
+
+  case replMaxEvaluationTime (replLimits env) of
+    Nothing ->
+      evalUnlimited src
+
+    Just seconds -> do
+      outcome <-
+        liftIO
+          ( runLimited
+              (replMaxAllocation (replLimits env))
+              (Just (secondsToMicros seconds))
+              (State.runStateT (evalUnlimited src) env)
+          )
+
+      case outcome of
+        Left AllocationExceeded ->
+          writeOutputHandle
+            "Error: evaluation exceeded --max-allocation\n"
+
+        Left TimeExceeded ->
+          writeOutputHandle
+            "Error: evaluation exceeded --max-evaluation-time\n"
+
+        Right (_, newEnv) ->
+          put newEnv
+
+evalUnlimited :: ( MonadIO m, MonadState Env m ) => String -> m ()
+evalUnlimited src = do
   loaded <-
     parseAndLoad src
 
   exprType <-
     typeCheck loaded
 
-  expr <-
-    normalize loaded
+  env <- get
 
-  modify ( \e -> e { envIt = Just ( Binding expr exprType ) } )
+  -- Quote only when `output` prints the value. The context keeps the value
+  -- that quote reuses, so a later command does not normalize `it` again.
+  let (ctx', expr) =
+          Dhall.bindAlreadyChecked "it" exprType loaded (envContext env)
 
-  output expr
+  normalized <-
+    normalizeForOutput expr
+
+  modify ( \e ->
+    e { envIt = Just ( Binding expr exprType )
+      , envContext = ctx'
+      } )
+
+  output normalized
 
 
 
@@ -186,25 +261,25 @@ typeOf src = do
   loaded <-
     parseAndLoad src
 
-  exprType <-
-    typeCheck loaded
+  env <- get
 
-  output exprType
+  case replMaxOutputSize (replLimits env) of
+    Nothing -> do
+      exprType <-
+        typeCheck loaded
 
+      output exprType
 
-applyContext
-    :: Context Binding
-    -> Dhall.Expr Dhall.Src Void
-    -> Dhall.Expr Dhall.Src Void
-applyContext context expression =
-    Dhall.Core.wrapInLets bindings expression
-  where
-    definitions = reverse $ Dhall.Context.toList context
+    Just nbytes -> do
+      let wrap = if explain env then Dhall.detailed else id
 
-    convertBinding (variable, Binding expr _) =
-        Dhall.Core.Binding Nothing variable Nothing Nothing Nothing expr
+      (exprType, quoteCut) <-
+        case Dhall.typeWithContextBounded nbytes (envContext env) loaded of
+          Left  e -> liftIO (wrap (throwIO e))
+          Right a -> return a
 
-    bindings = fmap convertBinding definitions
+      outputBounded nbytes quoteCut exprType
+
 
 normalize
   :: MonadState Env m
@@ -212,7 +287,23 @@ normalize
 normalize e = do
   env <- get
 
-  return (Dhall.normalize (applyContext (envToContext env) e))
+  return (Dhall.normalizeWithContext (envContext env) e)
+
+normalizeForOutput
+  :: MonadState Env m
+  => Dhall.Expr Dhall.Src Void -> m (Dhall.Expr Dhall.Src Void)
+normalizeForOutput e = do
+  env <- get
+
+  case replMaxOutputSize (replLimits env) of
+    Nothing ->
+      return (Dhall.normalizeWithContext (envContext env) e)
+
+    Just nbytes -> do
+      let (normalized, _cut) =
+              Dhall.normalizeWithContextBounded nbytes (envContext env) e
+
+      return normalized
 
 
 typeCheck
@@ -223,9 +314,12 @@ typeCheck expression = do
 
   let wrap = if explain env then Dhall.detailed else id
 
-  case Dhall.typeOf (applyContext (envToContext env) expression) of
-    Left  e -> liftIO ( wrap (throwIO e) )
-    Right a -> return a
+  let check =
+          case Dhall.typeWithContext (envContext env) expression of
+            Left  e -> wrap (throwIO e)
+            Right a -> return a
+
+  liftIO (withAllocationLimit (replMaxAllocation (replLimits env)) check)
 
 -- Split on the first '=' if there is any
 parseAssignment :: String -> Either String (String, String)
@@ -253,29 +347,31 @@ addBinding string = do
       Just (_, unresolvedType) -> do
           let annotated = Syntax.Annot value unresolvedType
 
-          resolved <- liftIO (Dhall.load annotated)
+          resolved <- loadHere annotated
 
           _ <- typeCheck resolved
 
-          bindingType <- liftIO (Dhall.load unresolvedType)
+          bindingType <- loadHere unresolvedType
 
           return (resolved, bindingType)
       _ -> do
-          resolved <- liftIO (Dhall.load value)
+          resolved <- loadHere value
 
           bindingType <- typeCheck resolved
 
           return (resolved, bindingType)
 
-  bindingExpr <- normalize resolved
-
   modify
     ( \e ->
+        let (ctx', bindingExpr) =
+                Dhall.bindAlreadyChecked variable bindingType resolved (envContext e)
+        in
         e { envBindings =
               Dhall.Context.insert
                 variable
                 Binding{ bindingType, bindingExpr }
                 ( envBindings e )
+          , envContext = ctx'
           }
     )
 
@@ -284,7 +380,12 @@ addBinding string = do
 clearBindings :: (MonadFail m, MonadState Env m) => String -> m ()
 clearBindings _ = modify adapt
   where
-    adapt (Env {..}) = Env { envBindings = Dhall.Context.empty, ..}
+    adapt (Env {..}) =
+      Env
+        { envBindings = Dhall.Context.empty
+        , envContext = Dhall.emptyTypingContext
+        , ..
+        }
 
 hashBinding :: ( MonadFail m, MonadIO m, MonadState Env m ) => String -> m ()
 hashBinding src = do
@@ -412,7 +513,7 @@ saveBinding (Right (file, src)) = do
 
   _ <- typeCheck loadedExpression
 
-  normalizedExpression <- normalize loadedExpression
+  normalizedExpression <- normalizeForOutput loadedExpression
 
   env <- get
 
@@ -663,12 +764,47 @@ outputWithoutSpacing
   :: (Pretty.Pretty a, MonadState Env m, MonadIO m)
   => Dhall.Expr Src a -> m ()
 outputWithoutSpacing expr = do
+  Env { characterSet, outputHandle, replLimits = ReplLimits { replMaxOutputSize } } <- get
+
+  case replMaxOutputSize of
+    Nothing ->
+      renderExpr characterSet outputHandle expr
+
+    Just nbytes ->
+      outputBounded nbytes False expr
+
+outputBounded
+  :: (Pretty.Pretty a, MonadIO m, MonadState Env m)
+  => Int -> Bool -> Dhall.Expr Src a -> m ()
+outputBounded nbytes quoteCut expr = do
   Env { characterSet, outputHandle } <- get
 
+  let doc = Dhall.Pretty.prettyCharacterSet characterSet expr
+
+  case prettyBounded nbytes doc of
+    Truncated text -> do
+      writeOutputHandle text
+      writeOutputHandle "Error: output exceeded --max-output-size\n"
+
+    Complete _ ->
+      if quoteCut
+        then do
+            renderExpr characterSet outputHandle expr
+            writeOutputHandle "Error: output exceeded --max-output-size\n"
+        else
+            renderExpr characterSet outputHandle expr
+
+renderExpr
+  :: (Pretty.Pretty a, MonadIO m)
+  => CharacterSet -> Maybe System.IO.Handle -> Dhall.Expr Src a -> m ()
+renderExpr characterSet outputHandle expr =
   case outputHandle of
-    Nothing     -> pure ()
+    Nothing ->
+      pure ()
+
     Just handle -> do
-      let stream = Dhall.Pretty.layout (Dhall.Pretty.prettyCharacterSet characterSet expr)
+      let stream =
+              Dhall.Pretty.layout (Dhall.Pretty.prettyCharacterSet characterSet expr)
 
       supportsANSI <- liftIO (System.Console.ANSI.hSupportsANSI handle)
       let ansiStream =
@@ -677,4 +813,13 @@ outputWithoutSpacing expr = do
               else Pretty.unAnnotateS stream
 
       liftIO (Pretty.renderIO handle ansiStream)
-      liftIO (System.IO.hPutStrLn handle "") -- Pretty printing doesn't end with a new line
+      liftIO (System.IO.hPutStrLn handle "")
+
+secondsToMicros :: Int -> Int
+secondsToMicros seconds
+    | seconds <= 0 = 0
+    | otherwise =
+        let micros = toInteger seconds * 1000000
+        in if micros > toInteger (maxBound :: Int)
+            then maxBound
+            else fromInteger micros

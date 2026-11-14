@@ -3,6 +3,7 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-| This is the entry point for the LSP server. -}
 module Dhall.LSP.Server (
@@ -15,6 +16,8 @@ import Control.Monad.IO.Class        (liftIO)
 import Data.Aeson                    (fromJSON)
 import Data.Default
 import Dhall                         (EvaluateSettings, defaultEvaluateSettings)
+import Dhall.LSP.Backend.Dhall       (emptyCache)
+import Dhall.LSP.Features            (featureHandlers)
 import Dhall.LSP.Handlers
     ( cancelationHandler
     , completionHandler
@@ -26,6 +29,7 @@ import Dhall.LSP.Handlers
     , executeCommandHandler
     , hoverHandler
     , initializedHandler
+    , setTraceHandler
     , textDocumentChangeHandler
     , workspaceChangeConfigurationHandler
     )
@@ -44,9 +48,12 @@ import System.IO                     (stdin, stdout)
 
 import qualified Colog.Core                       as Colog
 import qualified Control.Concurrent.MVar          as MVar
+import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.Except       as Except
 import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Aeson                       as Aeson
+import qualified Data.IORef                       as IORef
+import qualified Data.Map.Strict                  as Map
 import qualified Data.Text                        as Text
 import qualified Language.LSP.Logging             as LSP
 import qualified Language.LSP.Server              as LSP
@@ -63,7 +70,17 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let lspLogger = clientLogger <> Colog.hoistLogAction liftIO ioLogger
 
-  state <- MVar.newMVar initialState
+  errorStore <- IORef.newIORef Map.empty
+  documentStore <- IORef.newIORef Map.empty
+  envRef <- IORef.newIORef Nothing
+  negative <- IORef.newIORef Map.empty
+  bodies <- IORef.newIORef Map.empty
+  chains <- IORef.newIORef Map.empty
+  origins <- IORef.newIORef Map.empty
+  importCache <- IORef.newIORef emptyCache
+  state <-
+      MVar.newMVar
+          (initialState importCache errorStore documentStore envRef negative bodies chains origins)
 
   let defaultConfig = def
 
@@ -72,13 +89,10 @@ runWith settings = withLogger $ \ioLogger -> do
 
   let onConfigChange _newConfig = return ()
 
-  let parseConfig _oldConfig json =
+  let parseConfig = parseServerConfig
 #else
-  let onConfigurationChange _oldConfig json =
+  let onConfigurationChange = parseServerConfig
 #endif
-        case fromJSON json of
-            Aeson.Success config -> Right config
-            Aeson.Error   string -> Left (Text.pack string)
 
   let doInitialize environment _request = do
           return (Right environment)
@@ -98,7 +112,13 @@ runWith settings = withLogger $ \ioLogger -> do
               [ "dhall.server.lint",
                 "dhall.server.annotateLet",
                 "dhall.server.freezeImport",
-                "dhall.server.freezeAllImports"
+                "dhall.server.freezeAllImports",
+                "dhall.server.unfreezeImport",
+                "dhall.server.unfreezeAllImports",
+                "dhall.server.checkImportHash",
+                "dhall.server.explain",
+                "dhall.server.normalize",
+                "dhall.server.showOriginalSource"
               ]
         }
 
@@ -112,18 +132,24 @@ runWith settings = withLogger $ \ioLogger -> do
           , documentLinkHandler
           , completionHandler settings
           , initializedHandler
+          , setTraceHandler
           , workspaceChangeConfigurationHandler
-          , textDocumentChangeHandler
+          , textDocumentChangeHandler settings
           , cancelationHandler
           , documentDidCloseHandler
+          , featureHandlers settings
           ]
 
   let interpretHandler environment = Iso{..}
         where
           forward :: HandlerM a -> IO a
-          forward handler =
-            MVar.modifyMVar state \oldState -> do
-              LSP.runLspT environment do
+          forward handler = do
+            IORef.writeIORef envRef (Just environment)
+            -- Take a snapshot and release the lock before the handler runs,
+            -- so one request does not block the others. The document store
+            -- is an IORef shared by every snapshot.
+            oldState <- MVar.readMVar state
+            outcome <- Exception.try $ LSP.runLspT environment do
                 (e, newState) <- State.runStateT (Except.runExceptT handler) oldState
                 result <- case e of
                   Left (Log, _message) -> do
@@ -148,6 +174,12 @@ runWith settings = withLogger $ \ioLogger -> do
                       return a
 
                 return (newState, result)
+            case outcome of
+              Left (err :: Exception.SomeException) ->
+                Exception.throwIO err
+              Right (newState, result) -> do
+                MVar.modifyMVar_ state (\_ -> return newState)
+                return result
 
           backward = liftIO
 
@@ -156,6 +188,21 @@ runWith settings = withLogger $ \ioLogger -> do
   case exitCode of
       0 -> return ()
       n -> Exit.exitWith (ExitFailure n)
+
+-- | Parse the settings object sent by the client.  A JSON null means the
+--   client has no settings for this section (typical while the editor starts
+--   up); keep the old configuration in that case instead of failing.
+parseServerConfig :: ServerConfig -> Aeson.Value -> Either Text.Text ServerConfig
+parseServerConfig oldConfig Aeson.Null = Right oldConfig
+parseServerConfig _ json =
+    case fromJSON json of
+        Aeson.Success config -> Right config
+        Aeson.Error   string ->
+            Left
+                (  "expected a settings object with an optional \"vscode-dhall-lsp-server\" section, "
+                <> "for example {\"vscode-dhall-lsp-server\": {\"character-set\": \"ascii\"}}; "
+                <> Text.pack string
+                )
 
 -- | Retrieve the output logger.
 -- If no filename is provided then logger is disabled, if input is the string

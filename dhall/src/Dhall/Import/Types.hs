@@ -6,7 +6,7 @@
 
 module Dhall.Import.Types where
 
-import Control.Exception                (Exception)
+import Control.Exception                (Exception, SomeException)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.ByteString                  (ByteString)
 import Data.CaseInsensitive             (CI)
@@ -37,6 +37,21 @@ import qualified Dhall.Map          as Map
 import qualified Dhall.Substitution
 import qualified Dhall.Util
 import qualified System.Directory   as Directory
+
+-- | Key of one loaded import in the shared evaluation environment.
+--
+--   The twin expression uses @'Embed' ('ImportRef' n)@ at each use site.
+--   'Dhall.Import.normalizeLoaded' resolves every reference to one thunk.
+newtype ImportRef = ImportRef Int
+    deriving (Eq, Ord, Show)
+
+-- | A failed import in a collected expression.
+--
+--   The inlined tree holds @'Embed' ('ImportHole' n)@.  The source span, the
+--   import, and the errors live on 'CollectedImportError', not in a variable
+--   name.
+newtype ImportHole = ImportHole Int
+    deriving (Eq, Ord, Show)
 
 -- | A fully \"chained\" import, i.e. if it contains a relative path that path
 --   is relative to the current directory. If it is a remote import with headers
@@ -77,6 +92,24 @@ data Depends = Depends { parent :: Chained, child :: Chained }
     integrity checks
 -}
 data SemanticCacheMode = IgnoreSemanticCache | UseSemanticCache deriving (Eq)
+
+{-| Whether URL imports may fetch.
+
+    'AllowRemoteImports' is the default.  'RejectRemoteImports' fails an
+    @http@ or @https@ import used as code, @as Text@, or @as Bytes@ before
+    either import cache is consulted and before headers are resolved.
+    @as Location@, local files, and @env:@ imports are unchanged, including
+    @as Text@ and @as Bytes@.
+
+    This is not the Cabal flag @-f-with-http@.  Nixpkgs compiles @dhall@ with
+    that flag disabled so the binary has no HTTP client.  A hashed URL import
+    still resolves when Nix has already placed it in the semantic cache; a
+    cache miss fails inside Dhall instead of opening a connection.
+    'RejectRemoteImports' still links the HTTP client, and it rejects those
+    cache hits.  @as Location@ fetches nothing under either control.
+-}
+data RemoteImportMode = AllowRemoteImports | RejectRemoteImports
+    deriving (Eq, Show)
 
 -- | Shared state for HTTP requests
 type Manager =
@@ -119,6 +152,22 @@ data Status = Status
     , _cache :: Map Chained ImportSemantics
     -- ^ Cache of imported expressions with their node id in order to avoid
     --   importing the same expression twice with different values
+
+    , _importTypes :: Map Chained (Expr Src Void)
+    -- ^ Type of each cached import, recorded when that import is type-checked
+    --   so a parent can reuse it instead of inferring the child again.
+
+    , _importRefs :: Map Chained ImportRef
+    -- ^ Stable reference of each cached import in the shared evaluation
+    --   environment.  Allocated once, the first time that import is loaded.
+
+    , _importBodies :: Map ImportRef (Expr Src ImportRef)
+    -- ^ Body of each cached import with child imports replaced by their
+    --   references.  Source spans are stripped when evaluation forces the
+    --   body.  An already-closed import stores that closed expression.
+
+    , _importRefCount :: !Int
+    -- ^ Next 'ImportRef' to allocate.
 
     , _merkleHashCache :: Map Chained SHA256Digest
     -- ^ Per-run map from import to the hash used as that import's contribution
@@ -170,6 +219,11 @@ data Status = Status
 
     , _semanticCacheMode :: SemanticCacheMode
 
+    , _remoteImportMode :: RemoteImportMode
+    -- ^ 'RejectRemoteImports' fails URL imports that would fetch.  See
+    --   'RemoteImportMode'.  The default, from 'emptyStatusWith', is
+    --   'AllowRemoteImports'.
+
     , _cacheWarning :: CacheWarning
     -- ^ Records whether or not we already warned the user about issues with
     --   cache directory
@@ -179,6 +233,85 @@ data Status = Status
 
     , _getHomeDirectory :: IO FilePath
     -- ^ Action to get the home directory for resolving @~@ imports (special case for Windows tests)
+
+    , _importErrorMode :: ImportErrorMode
+    -- ^ 'FailFast' (the default used by 'Dhall.Import.load') throws on the
+    --   first import error.  'CollectErrors' records every failure and
+    --   continues.  @?@ alternatives stay fail-fast either way.
+
+    , _insideImportAlt :: Bool
+    -- ^ 'True' while resolving either side of @?@.  Failures there must
+    --   throw so the other side can run.
+
+    , _collectedImportErrors :: [CollectedImportError]
+    -- ^ Import failures recorded in 'CollectErrors' mode, innermost first.
+
+    , _placeholderCount :: !Int
+    -- ^ Next 'ImportHole' index.
+
+    , _embeddedHoleCount :: !Int
+    -- ^ How many holes have been placed into a resolved expression.  A file
+    --   compares this before and after resolving its imports, instead of
+    --   walking the inlined tree to look for a hole.
+
+    , _importHoles :: Map Chained ImportHole
+    -- ^ Imports that failed and were replaced by a hole.  They are not values
+    --   in '_cache'.
+
+    , _importSources :: Map Chained ResolvedImportSource
+    -- ^ Text and location captured when an import was actually fetched.
+
+    , _keepImportSources :: Bool
+    -- ^ 'False' when no caller reads '_importSources'.  It then stays empty
+    --   instead of holding the source text of every fetched file.
+
+    , _keepImportBodies :: Bool
+    -- ^ 'False' on a private path that neither returns 'Status' nor evaluates
+    --   the shared expression.  'Dhall.resolveSharedWithSettings' leaves this
+    --   'True', including when a custom normalizer is set, so
+    --   'normalizeLoaded' can still run.  '_importBodies' then stays empty
+    --   only for callers that would not read it.
+
+    , _sharedEvaluation :: Bool
+    -- ^ 'True' when the caller will evaluate through 'normalizeLoaded'.
+    --   'loadWith' leaves this 'False' and does not build a second syntax tree.
+
+    , _verifySemanticHash :: Bool
+    -- ^ When 'True', a hashed import is normalized and rejected if its
+    --   semantic hash differs.  The language server leaves this 'False'
+    --   during ordinary loads and checks a hash only when asked.
+    }
+
+-- | How 'Dhall.Import.loadWith' treats a failed import.
+data ImportErrorMode
+    = FailFast
+    -- ^ Throw on the first failure.  This is what 'Dhall.Import.load' uses.
+    | CollectErrors
+    -- ^ Record the failure and keep resolving later imports.
+    deriving (Eq, Show)
+
+-- | A type that is known even when the import failed to resolve.
+data KnownImportType = KnownText | KnownBytes | KnownLocation
+    deriving (Eq, Show)
+
+-- | One import that failed while resolving in 'CollectErrors' mode.
+data CollectedImportError = CollectedImportError
+    { collectedSrc :: Src
+    , collectedImport :: Maybe Import
+    , collectedStack :: NonEmpty Chained
+    , collectedErrors :: [SomeException]
+    , collectedKnownType :: Maybe KnownImportType
+    , collectedHole :: ImportHole
+    -- ^ Hole substituted for this failure.
+    }
+
+-- | Source text fetched for an import, and where it was fetched from.
+--
+--   'resolvedSourceText' is 'Nothing' for a semantic-cache hit: the original
+--   source was not downloaded.  Decode the cache entry separately.
+data ResolvedImportSource = ResolvedImportSource
+    { resolvedSourceText :: Maybe Text
+    , resolvedLocation :: Text
     }
 
 -- | Initial `Status`, parameterised over the HTTP 'Manager',
@@ -199,6 +332,14 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _cache = Map.empty
 
+    _importTypes = Map.empty
+
+    _importRefs = Map.empty
+
+    _importBodies = Map.empty
+
+    _importRefCount = 0
+
     _merkleHashCache = Map.empty
 
     _merkleContextFingerprint = Nothing
@@ -215,11 +356,35 @@ emptyStatusWith _newManager _loadOriginHeaders _remote _remoteBytes rootImport =
 
     _semanticCacheMode = UseSemanticCache
 
+    _remoteImportMode = AllowRemoteImports
+
     _cacheWarning = CacheNotWarned
 
     _reportWarning = Dhall.Util.printWarning
 
     _getHomeDirectory = Directory.getHomeDirectory
+
+    _importErrorMode = FailFast
+
+    _insideImportAlt = False
+
+    _collectedImportErrors = []
+
+    _placeholderCount = 0
+
+    _embeddedHoleCount = 0
+
+    _importHoles = Map.empty
+
+    _importSources = Map.empty
+
+    _keepImportSources = True
+
+    _keepImportBodies = True
+
+    _sharedEvaluation = False
+
+    _verifySemanticHash = True
 
 -- | Lens from a `Status` to its `_stack` field
 stack :: Lens' Status (NonEmpty Chained)
@@ -232,6 +397,18 @@ graph = lens _graph (\s x -> s { _graph = x })
 -- | Lens from a `Status` to its `_cache` field
 cache :: Lens' Status (Map Chained ImportSemantics)
 cache = lens _cache (\s x -> s { _cache = x })
+
+-- | Lens from a `Status` to its `_importTypes` field
+importTypes :: Lens' Status (Map Chained (Expr Src Void))
+importTypes = lens _importTypes (\s x -> s { _importTypes = x })
+
+-- | Lens from a `Status` to its `_importRefs` field
+importRefs :: Lens' Status (Map Chained ImportRef)
+importRefs = lens _importRefs (\s x -> s { _importRefs = x })
+
+-- | Lens from a `Status` to its `_importBodies` field
+importBodies :: Lens' Status (Map ImportRef (Expr Src ImportRef))
+importBodies = lens _importBodies (\s x -> s { _importBodies = x })
 
 -- | Lens from a `Status` to its `_merkleHashCache` field
 merkleHashCache :: Lens' Status (Map Chained SHA256Digest)
@@ -281,6 +458,31 @@ cacheWarning = lens _cacheWarning (\s x -> s { _cacheWarning = x })
 -- | Lens from a `Status` to its `_reportWarning` field
 reportWarning :: Lens' Status (Text -> IO ())
 reportWarning = lens _reportWarning (\s x -> s { _reportWarning = x })
+
+-- | Lens from a `Status` to its `_importErrorMode` field
+importErrorMode :: Lens' Status ImportErrorMode
+importErrorMode = lens _importErrorMode (\s x -> s { _importErrorMode = x })
+
+-- | Lens from a `Status` to its `_collectedImportErrors` field
+collectedImportErrors :: Lens' Status [CollectedImportError]
+collectedImportErrors =
+    lens _collectedImportErrors (\s x -> s { _collectedImportErrors = x })
+
+-- | Lens from a `Status` to its `_importHoles` field
+importHoles :: Lens' Status (Map Chained ImportHole)
+importHoles = lens _importHoles (\s x -> s { _importHoles = x })
+
+-- | Lens from a `Status` to its `_verifySemanticHash` field
+verifySemanticHash :: Lens' Status Bool
+verifySemanticHash = lens _verifySemanticHash (\s x -> s { _verifySemanticHash = x })
+
+-- | Lens from a `Status` to its `_remoteImportMode` field
+remoteImportMode :: Lens' Status RemoteImportMode
+remoteImportMode = lens _remoteImportMode (\s x -> s { _remoteImportMode = x })
+
+-- | Lens from a `Status` to its `_importSources` field
+importSources :: Lens' Status (Map Chained ResolvedImportSource)
+importSources = lens _importSources (\s x -> s { _importSources = x })
 
 {-| This exception indicates that there was an internal error in Dhall's
     import-related logic

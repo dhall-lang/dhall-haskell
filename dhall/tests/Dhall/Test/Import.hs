@@ -4,20 +4,27 @@
 
 module Dhall.Test.Import where
 
-import Control.Exception (SomeException)
+import Control.Exception (Exception, SomeException)
 import Data.Text         (Text)
 import Data.Void         (Void)
 #if __GLASGOW_HASKELL__ >= 906
 import Data.Default      (def)
 #endif
-import System.FilePath   ((</>))
-import Test.Tasty        (TestTree)
+import System.Environment (setEnv, unsetEnv)
+import System.FilePath    ((</>))
+import Test.Tasty         (TestTree)
 
 import qualified Control.Exception                as Exception
 import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.ByteString.Char8            as ByteString.Char8
+import qualified Data.List                        as List
 import qualified Data.Text                        as Text
 import qualified Data.Text.IO                     as Text.IO
 import qualified Dhall.Core                       as Core
+import qualified Dhall.Crypto
+import qualified Dhall.Map                        as Map
+import qualified Dhall
+import qualified Lens.Micro                       as Lens
 import qualified Dhall.Import                     as Import
 import qualified Dhall.Parser                     as Parser
 import qualified Dhall.Test.Util                  as Test.Util
@@ -80,6 +87,16 @@ getTests = do
             Tasty.testGroup "import tests"
                 [ successTests
                 , failureTests
+                , plainImportErrorTests
+                , collectImportErrorTests
+                , sharedImportEvaluationTests
+                , customNormalizerEvaluatesInlinedTree
+                , customNormalizerSharedTreeStillNormalizes
+                , sharedImportRefsHaveBodies
+                , defaultStatusRecordsSources
+                , omittingImportSourcesLeavesResolutionUnchanged
+                , invalidSubstitutionKeepsParseSource
+                , noRemoteTests
                 ]
 
     return testTree
@@ -260,3 +277,452 @@ importLoadWith = Test.Util.loadWith
 importStatus :: FilePath -> Import.Status
 importStatus = Import.emptyStatus
 #endif
+
+-- | A fold imported through two files is evaluated once, and the normal form
+--   matches normalizing the fully inlined tree.  @site1@ projects away the
+--   expensive field.
+sharedImportEvaluationTests :: TestTree
+sharedImportEvaluationTests =
+    Tasty.HUnit.testCase "shared import evaluation matches inlined normalization" $
+        Temp.withSystemTempDirectory "dhall-shared-import" $ \dir -> do
+            let write name text = Text.IO.writeFile (dir </> name) text
+            write "prelude.dhall" $ Text.unlines
+                [ "let increment = \\(x : Natural) -> x + 1"
+                , "let factor = 4"
+                , "let expensive = Natural/fold factor Natural increment 0"
+                , "let cheap = 1"
+                , "in { increment, expensive, cheap }"
+                ]
+            write "site1.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.increment Prelude.cheap\n"
+            write "site2.dhall"
+                "let Prelude = ./prelude.dhall in Prelude.expensive\n"
+            write "main.dhall"
+                "{ used = ./site2.dhall, ignored = ./site1.dhall }\n"
+
+            (site1Shared, site1Inlined) <- normalizePair dir "site1.dhall"
+            site1Shared Tasty.HUnit.@?= site1Inlined
+            site1Shared Tasty.HUnit.@?= Core.NaturalLit 2
+
+            (mainShared, mainInlined) <- normalizePair dir "main.dhall"
+            mainShared Tasty.HUnit.@?= mainInlined
+
+-- | A custom normalizer is applied to the fully inlined tree.  Shared
+--   evaluation does not consult it, so this result is the rewritten natural
+--   at every use site.
+customNormalizerEvaluatesInlinedTree :: TestTree
+customNormalizerEvaluatesInlinedTree =
+    Tasty.HUnit.testCase "custom normalizer evaluates the inlined tree" $
+        Temp.withSystemTempDirectory "dhall-custom-normalizer" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            let normalizer (Core.NaturalLit 0) = Just (Core.NaturalLit 7)
+                normalizer _ = Nothing
+                settings =
+                    Lens.set
+                        Dhall.normalizer
+                        (Just (Core.ReifiedNormalizer (pure . normalizer)))
+                        (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+            result <-
+                Dhall.inputExprWithSettings
+                    settings
+                    "{ a = ./shared.dhall, b = ./shared.dhall }\n"
+            let expected =
+                    Core.RecordLit
+                        ( Map.fromList
+                            [ ("a", Core.makeRecordField (Core.NaturalLit 7))
+                            , ("b", Core.makeRecordField (Core.NaturalLit 7))
+                            ]
+                        )
+            Core.denote result Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
+
+-- | 'resolveSharedWithSettings' keeps import bodies even when a custom
+--   normalizer is set, and 'normalizeLoaded' performs ordinary built-in
+--   normalization of that shared tree.
+customNormalizerSharedTreeStillNormalizes :: TestTree
+customNormalizerSharedTreeStillNormalizes =
+    Tasty.HUnit.testCase "custom normalizer leaves normalizeLoaded on the builtin path" $
+        Temp.withSystemTempDirectory "dhall-custom-normalizer-shared" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            (resolved, shared, status) <- resolveShared dir
+            let sharedNF = Core.denote (Import.normalizeLoaded status shared)
+                builtinNF = Core.denote (Core.normalize resolved)
+                expected =
+                    Core.RecordLit
+                        ( Map.fromList
+                            [ ("a", Core.makeRecordField (Core.NaturalLit 0))
+                            , ("b", Core.makeRecordField (Core.NaturalLit 0))
+                            ]
+                        )
+            (sharedNF :: Core.Expr Void Void) Tasty.HUnit.@?= builtinNF
+            sharedNF Tasty.HUnit.@?= (expected :: Core.Expr Void Void)
+
+sharedImportRefsHaveBodies :: TestTree
+sharedImportRefsHaveBodies =
+    Tasty.HUnit.testCase "every shared ImportRef has a body" $
+        Temp.withSystemTempDirectory "dhall-shared-bodies" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            (_, shared, status) <- resolveShared dir
+            let refs = importRefs shared
+            Tasty.HUnit.assertBool "shared tree has an import" (not (null refs))
+            mapM_ (assertHasBody status) refs
+  where
+    assertHasBody status ref =
+        Tasty.HUnit.assertBool "missing import body" $
+            Map.member ref (Import._importBodies status)
+
+    importRefs (Core.Embed ref) = [ref]
+    importRefs expr = concatMap importRefs (Lens.toListOf Core.subExpressions expr)
+
+defaultStatusRecordsSources :: TestTree
+defaultStatusRecordsSources =
+    Tasty.HUnit.testCase "the default status records import sources" $
+        Temp.withSystemTempDirectory "dhall-import-sources" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            parsed <- sharedExpr
+            let settings = Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings
+            (_, status) <- Dhall.resolveAndStatusWithSettings settings parsed
+            Tasty.HUnit.assertBool "import sources are empty" $
+                not (null (Map.keys (Import._importSources status)))
+
+omittingImportSourcesLeavesResolutionUnchanged :: TestTree
+omittingImportSourcesLeavesResolutionUnchanged =
+    Tasty.HUnit.testCase "dropping import sources does not change resolution" $
+        Temp.withSystemTempDirectory "dhall-omit-sources" $ \dir -> do
+            Text.IO.writeFile (dir </> "shared.dhall") "0\n"
+            parsed <- sharedExpr
+            (kept, keptStatus) <- loadSources dir parsed True
+            (dropped, droppedStatus) <- loadSources dir parsed False
+            (Core.denote kept :: Core.Expr Void Void) Tasty.HUnit.@?= Core.denote dropped
+            Tasty.HUnit.assertBool "sources were not recorded" $
+                not (null (Map.keys (Import._importSources keptStatus)))
+            null (Map.keys (Import._importSources droppedStatus))
+                Tasty.HUnit.@?= True
+
+            missing <- Core.throws (Parser.exprFromText "(test)" "./missing.dhall\n")
+            keptError <- Exception.try @SomeException (evalMissing dir missing True)
+            droppedError <- Exception.try @SomeException (evalMissing dir missing False)
+            case (keptError, droppedError) of
+                (Left left, Left right) ->
+                    show left Tasty.HUnit.@?= show right
+                _ ->
+                    Tasty.HUnit.assertFailure "missing import should fail"
+  where
+    loadSources dir parsed keep = do
+        let status =
+                (Import.emptyStatus dir)
+                    { Import._keepImportSources = keep
+                    , Import._semanticCacheMode = Import.IgnoreSemanticCache
+                    }
+        State.runStateT (Import.loadWith parsed) status
+
+    evalMissing dir parsed keep =
+        State.evalStateT (Import.loadWith parsed) $
+            (Import.emptyStatus dir)
+                { Import._keepImportSources = keep
+                , Import._semanticCacheMode = Import.IgnoreSemanticCache
+                }
+
+invalidSubstitutionKeepsParseSource :: TestTree
+invalidSubstitutionKeepsParseSource =
+    Tasty.HUnit.testCase "an invalid substitution keeps its parse source" $
+        Temp.withSystemTempDirectory "dhall-substitution-source" $ \dir -> do
+            Text.IO.writeFile (dir </> "child.dhall") "Bad\n"
+            bad <- Import.assertNoImports =<<
+                Core.throws (Parser.exprFromText "(substitution)" "1 : Bool\n")
+            let settings =
+                    Lens.set
+                        Dhall.substitutions
+                        (Map.fromList [("Bad", bad)])
+                        (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+            result <- Exception.try @SomeException $
+                Dhall.inputExprWithSettings settings "./child.dhall\n"
+            case result of
+                Right _ ->
+                    Tasty.HUnit.assertFailure "expected a type error"
+                Left err ->
+                    Tasty.HUnit.assertBool (show err) $
+                        "(substitution)" `List.isInfixOf` show err
+
+resolveShared
+    :: FilePath
+    -> IO (Core.Expr Parser.Src Void, Core.Expr Parser.Src Import.ImportRef, Import.Status)
+resolveShared dir = do
+    parsed <- sharedExpr
+    let normalizer (Core.NaturalLit 0) = Just (Core.NaturalLit 7)
+        normalizer _ = Nothing
+        settings =
+            Lens.set
+                Dhall.normalizer
+                (Just (Core.ReifiedNormalizer (pure . normalizer)))
+                (Lens.set Dhall.rootDirectory dir Dhall.defaultInputSettings)
+    Dhall.resolveSharedWithSettings settings parsed
+
+sharedExpr :: IO (Core.Expr Parser.Src Core.Import)
+sharedExpr =
+    Core.throws (Parser.exprFromText "(test)" "{ a = ./shared.dhall, b = ./shared.dhall }\n")
+
+normalizePair
+    :: FilePath
+    -> FilePath
+    -> IO (Core.Expr Void Void, Core.Expr Void Void)
+normalizePair dir file = do
+    text <- Text.IO.readFile (dir </> file)
+    parsed <- Core.throws (Parser.exprFromText file text)
+    let status =
+            (Import.emptyStatus dir)
+                { Import._semanticCacheMode = Import.IgnoreSemanticCache }
+    ((inlined, twin), status') <-
+        State.runStateT (Import.loadWithShared parsed) status
+    let sharedNF = Core.denote (Import.normalizeLoaded status' twin)
+        inlinedNF = Core.denote (Core.normalize inlined)
+    return (sharedNF, inlinedNF)
+
+-- | 'Show' for import errors embeds ANSI colour.  'Import.plainShowImportError'
+--   is that same text with the colour codes removed.
+plainImportErrorTests :: TestTree
+plainImportErrorTests =
+    Tasty.testGroup "plain import errors"
+        [ assertPlainImportError
+            "missing file"
+            (Import.MissingImports
+                [Exception.toException (Import.MissingFile "missing.dhall")]
+            )
+            ["Missing file", "missing.dhall"]
+        , assertPlainImportError
+            "missing environment variable"
+            (Import.MissingEnvironmentVariable "DHALL_MISSING")
+            ["Missing environment variable", "DHALL_MISSING"]
+        , assertPlainImportError
+            "no valid imports"
+            (Import.MissingImports [])
+            ["No valid imports"]
+        , assertPlainImportError
+            "several failed imports"
+            (Import.MissingImports
+                [ Exception.toException (Import.MissingFile "a.dhall")
+                , Exception.toException
+                    (Import.MissingEnvironmentVariable "NOT_SET")
+                ]
+            )
+            [ "Failed to resolve imports"
+            , "Missing file"
+            , "a.dhall"
+            , "Missing environment variable"
+            , "NOT_SET"
+            ]
+        , assertPlainImportError
+            "hash mismatch"
+            (Import.HashMismatch
+                { Import.expectedHash =
+                    Dhall.Crypto.sha256Hash (ByteString.Char8.pack "expected")
+                , Import.actualHash =
+                    Dhall.Crypto.sha256Hash (ByteString.Char8.pack "actual")
+                }
+            )
+            ["Import integrity check failed", "Expected hash:", "Actual hash:"]
+        ]
+
+assertPlainImportError :: Exception e => String -> e -> [String] -> TestTree
+assertPlainImportError name exception fragments =
+    Tasty.HUnit.testCase name $ do
+        let coloured = show exception
+        Tasty.HUnit.assertBool
+            ("Show output should contain ANSI colour codes:\n" ++ coloured)
+            (hasAnsi coloured)
+        let plain = Import.plainShowImportError (Exception.toException exception)
+        Tasty.HUnit.assertBool
+            ("plainShowImportError should not contain ANSI colour codes:\n" ++ plain)
+            (not (hasAnsi plain))
+        mapM_
+            (\fragment -> do
+                Tasty.HUnit.assertBool
+                    ("Show output should contain " ++ show fragment)
+                    (fragment `List.isInfixOf` coloured)
+                Tasty.HUnit.assertBool
+                    ("plain output should contain " ++ show fragment)
+                    (fragment `List.isInfixOf` plain)
+            )
+            fragments
+
+hasAnsi :: String -> Bool
+hasAnsi text = "\ESC[" `List.isInfixOf` text
+
+-- | 'loadRelativeTo' throws on the first missing import.  'loadCollecting'
+--   records every one.
+collectImportErrorTests :: TestTree
+collectImportErrorTests =
+    Tasty.testGroup "collected import errors"
+        [ Tasty.HUnit.testCase "load stops at the first missing import" $
+            withTwoMissingImports $ \dir -> do
+                expr <- parseParent dir
+                result <-
+                    Exception.try @SomeException
+                        (Import.loadRelativeTo dir Import.IgnoreSemanticCache expr)
+                case result of
+                    Right _ ->
+                        Tasty.HUnit.assertFailure "load succeeded"
+                    Left err -> do
+                        let paths = missingFilePaths err
+                        assertPathMentioned "missing-a.dhall" paths
+                        assertPathAbsent "missing-b.dhall" paths
+        , Tasty.HUnit.testCase "CollectErrors returns every missing import" $
+            withTwoMissingImports $ \dir -> do
+                expr <- parseParent dir
+                (_resolved, errs) <-
+                    Import.loadCollecting dir Import.IgnoreSemanticCache expr
+                let paths =
+                        concatMap
+                            (concatMap missingFilePaths . Import.collectedErrors)
+                            errs
+                Tasty.HUnit.assertEqual "number of failures" 2 (length errs)
+                assertPathMentioned "missing-a.dhall" paths
+                assertPathMentioned "missing-b.dhall" paths
+        ]
+
+withTwoMissingImports :: (FilePath -> IO a) -> IO a
+withTwoMissingImports action =
+    Temp.withSystemTempDirectory "dhall-collect-imports" $ \dir -> do
+        Text.IO.writeFile
+            (dir </> "parent.dhall")
+            "[ ./missing-a.dhall, ./missing-b.dhall ]\n"
+        action dir
+
+parseParent :: FilePath -> IO (Core.Expr Parser.Src Core.Import)
+parseParent dir = do
+    text <- Text.IO.readFile (dir </> "parent.dhall")
+    Core.throws (Parser.exprFromText mempty text)
+
+missingFilePaths :: SomeException -> [FilePath]
+missingFilePaths exception =
+    case Exception.fromException @(Parser.SourcedException Import.MissingImports) exception of
+        Just (Parser.SourcedException _ (Import.MissingImports es)) ->
+            concatMap missingFilePaths es
+        Nothing ->
+            case Exception.fromException @Import.MissingImports exception of
+                Just (Import.MissingImports es) ->
+                    concatMap missingFilePaths es
+                Nothing ->
+                    case Exception.fromException @(Import.Imported Import.MissingFile) exception of
+                        Just (Import.Imported _ (Import.MissingFile path)) ->
+                            [path]
+                        Nothing ->
+                            case Exception.fromException @Import.MissingFile exception of
+                                Just (Import.MissingFile path) ->
+                                    [path]
+                                Nothing ->
+                                    []
+
+assertPathMentioned :: String -> [FilePath] -> IO ()
+assertPathMentioned fragment paths =
+    Tasty.HUnit.assertBool
+        (fragment ++ " missing from " ++ show paths)
+        (any (List.isInfixOf fragment) paths)
+
+noRemoteTests :: TestTree
+noRemoteTests =
+    Tasty.testGroup "no-remote"
+        [ expectRemoteDisabled "https://example.com/foo.dhall"
+        , expectRemoteDisabled "https://example.com/foo.dhall as Text"
+        , expectRemoteDisabled "https://example.com/foo.dhall as Bytes"
+        , expectRemoteDisabled
+            "https://example.com/foo.dhall sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        , Tasty.HUnit.testCase "https as Location" $ do
+            expr <- resolveRejected "https://example.com/foo.dhall as Location"
+            let rendered = Core.pretty (Core.denote expr)
+            Tasty.HUnit.assertBool
+                (Text.unpack rendered)
+                (Text.isInfixOf ".Remote" rendered
+                    && Text.isInfixOf "\"https://example.com/foo.dhall\"" rendered
+                )
+        , Tasty.HUnit.testCase "local as Text and as Bytes" $
+            Temp.withSystemTempDirectory "no-remote" $ \dir -> do
+                Text.IO.writeFile (dir </> "note.txt") "hello"
+                ByteString.Char8.writeFile
+                    (dir </> "note.bin")
+                    (ByteString.Char8.pack "hi")
+                textExpr <-
+                    resolveIn dir Import.RejectRemoteImports "./note.txt as Text"
+                bytesExpr <-
+                    resolveIn dir Import.RejectRemoteImports "./note.bin as Bytes"
+                Tasty.HUnit.assertEqual
+                    "as Text"
+                    (Core.TextLit (Core.Chunks [] "hello") :: Core.Expr Void Void)
+                    (Core.denote textExpr :: Core.Expr Void Void)
+                Tasty.HUnit.assertEqual
+                    "as Bytes"
+                    (Core.BytesLit (ByteString.Char8.pack "hi") :: Core.Expr Void Void)
+                    (Core.denote bytesExpr :: Core.Expr Void Void)
+        , Tasty.HUnit.testCase "env import" $
+            Exception.bracket_
+                (setEnv "DHALL_NO_REMOTE_TEST_VALUE" "1")
+                (unsetEnv "DHALL_NO_REMOTE_TEST_VALUE")
+                $ do
+                    expr <- resolveRejected "env:DHALL_NO_REMOTE_TEST_VALUE"
+                    Tasty.HUnit.assertEqual
+                        "env"
+                        (Core.NaturalLit 1 :: Core.Expr Void Void)
+                        (Core.denote expr :: Core.Expr Void Void)
+        , Tasty.HUnit.testCase "import alternative" $ do
+            expr <- resolveRejected "https://example.com/foo.dhall ? 1"
+            Tasty.HUnit.assertEqual
+                "alternative"
+                (Core.NaturalLit 1 :: Core.Expr Void Void)
+                (Core.denote expr :: Core.Expr Void Void)
+        ]
+
+expectRemoteDisabled :: Text -> TestTree
+expectRemoteDisabled code =
+    Tasty.HUnit.testCase (Text.unpack code) $ do
+        result <-
+            Exception.try @SomeException
+                (resolveRejected code)
+        case remoteDisabledUrl result of
+            Just url
+                | "https://example.com/foo.dhall" `List.isInfixOf` url ->
+                    pure ()
+            other ->
+                Tasty.HUnit.assertFailure
+                    ("expected RemoteImportsDisabled, got " ++ show other)
+
+remoteDisabledUrl :: Either SomeException (Core.Expr Parser.Src Void) -> Maybe String
+remoteDisabledUrl (Right _) = Nothing
+remoteDisabledUrl (Left some) =
+    case missingImports some of
+        Just [one]
+            | Just (Import.Imported _ (Import.RemoteImportsDisabled url)) <-
+                Exception.fromException one ->
+                Just url
+        _ ->
+            Nothing
+  where
+    missingImports exception =
+        case Exception.fromException @(Parser.SourcedException Import.MissingImports) exception of
+            Just (Parser.SourcedException _ (Import.MissingImports es)) ->
+                Just es
+            Nothing ->
+                case Exception.fromException @Import.MissingImports exception of
+                    Just (Import.MissingImports es) ->
+                        Just es
+                    Nothing ->
+                        Nothing
+
+resolveRejected :: Text -> IO (Core.Expr Parser.Src Void)
+resolveRejected = resolveIn "." Import.RejectRemoteImports
+
+resolveIn
+    :: FilePath
+    -> Import.RemoteImportMode
+    -> Text
+    -> IO (Core.Expr Parser.Src Void)
+resolveIn directory remoteImportMode code = do
+    parsed <- Core.throws (Parser.exprFromText "(test)" code)
+    let status =
+            (Import.emptyStatus directory)
+                { Import._remoteImportMode = remoteImportMode }
+    State.evalStateT (Import.loadWith parsed) status
+
+assertPathAbsent :: String -> [FilePath] -> IO ()
+assertPathAbsent fragment paths =
+    Tasty.HUnit.assertBool
+        (fragment ++ " unexpectedly in " ++ show paths)
+        (all (not . List.isInfixOf fragment) paths)

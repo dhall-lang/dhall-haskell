@@ -14,6 +14,3 @@ if impl(ghc < 9.8)
   packages:
     ./dhall-nix
     ./dhall-nixpkgs
-
-if impl(ghc >= 9.12)
-  allow-newer: repline:containers

@@ -402,6 +402,7 @@ normalizeWithM ctx e0 = fmap (Syntax.renote . Syntax.denote) (loop (Syntax.denot
             where
               decide (BoolLit True )  r              = r
               decide  l              (BoolLit True ) = l
+              decide (BoolLit b)     (BoolLit c)     = BoolLit (b == c)
               decide  l               r
                   | Eval.judgmentallyEqual l r = BoolLit True
                   | otherwise                  = BoolEQ l r
@@ -409,6 +410,7 @@ normalizeWithM ctx e0 = fmap (Syntax.renote . Syntax.denote) (loop (Syntax.denot
             where
               decide (BoolLit False)  r              = r
               decide  l              (BoolLit False) = l
+              decide (BoolLit b)     (BoolLit c)     = BoolLit (b /= c)
               decide  l               r
                   | Eval.judgmentallyEqual l r = BoolLit False
                   | otherwise                  = BoolNE l r

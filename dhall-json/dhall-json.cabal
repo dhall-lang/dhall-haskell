@@ -51,6 +51,7 @@ Library
         prettyprinter             >= 1.7.0     && < 1.8 ,
         scientific                >= 0.3.0.0   && < 0.4 ,
         text                      >= 0.11.1.0  && < 2.2 ,
+        transformers              >= 0.5.2.0   && < 0.7 ,
         unordered-containers                      < 0.3 ,
         vector
     Exposed-Modules:

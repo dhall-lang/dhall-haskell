@@ -235,14 +235,21 @@ parseUnion =
 type ExprX = Expr Src Void
 
 -- | Parse schema code and resolve imports
-resolveSchemaExpr :: Text  -- ^ type code (schema)
-                  -> IO ExprX
-resolveSchemaExpr code = do
+resolveSchemaExpr
+    :: Dhall.Import.RemoteImportMode
+    -> Text  -- ^ type code (schema)
+    -> IO ExprX
+resolveSchemaExpr remoteImportMode code = do
     parsedExpression <-
       case Dhall.Parser.exprFromText "\n\ESC[1;31m(schema)\ESC[0m" code of
         Left  err              -> throwIO err
         Right parsedExpression -> return parsedExpression
-    Dhall.Import.load parsedExpression
+    let status =
+            (Dhall.Import.emptyStatus ".")
+                { Dhall.Import._semanticCacheMode = Dhall.Import.UseSemanticCache
+                , Dhall.Import._remoteImportMode = remoteImportMode
+                }
+    Dhall.Import.loadWithStatus status Dhall.Import.UseSemanticCache parsedExpression
 
 -- | Check that the Dhall type expression actually has type 'Type'
 typeCheckSchemaExpr :: (Exception e, MonadCatch m)

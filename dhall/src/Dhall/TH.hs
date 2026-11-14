@@ -23,7 +23,9 @@ module Dhall.TH
 import Control.Monad             (forM_)
 import Data.Bifunctor            (first)
 import Data.Text                 (Text)
+import Data.Void                 (Void)
 import Dhall                     (FromDhall, ToDhall)
+import Dhall.Src                 (Src)
 import Dhall.Syntax              (Expr (..), FunctionBinding (..), Var (..))
 import GHC.Generics              (Generic)
 import Language.Haskell.TH.Quote (QuasiQuoter (..), dataToExpQ)
@@ -46,14 +48,15 @@ import Language.Haskell.TH.Syntax
 
 import Language.Haskell.TH.Syntax (DerivClause (..), DerivStrategy (..))
 
-import qualified Data.List                   as List
-import qualified Data.Map                    as Map
-import qualified Data.Set                    as Set
-import qualified Data.Text                   as Text
-import qualified Data.Time                   as Time
-import qualified Data.Typeable               as Typeable
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.List                         as List
+import qualified Data.Map                          as Map
+import qualified Data.Set                          as Set
+import qualified Data.Text                         as Text
+import qualified Data.Time                         as Time
+import qualified Data.Typeable                     as Typeable
 import qualified Dhall
-import qualified Dhall.Core                  as Core
+import qualified Dhall.Core                        as Core
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Pretty
@@ -96,11 +99,17 @@ staticDhallExpression text = do
     (expression, status) <- TH.runIO $ do
         parsed <- Dhall.parseWithSettings Dhall.defaultInputSettings text
 
-        (resolved, status) <- Dhall.resolveAndStatusWithSettings Dhall.defaultInputSettings parsed
+        (resolved, shared, status) <-
+            Dhall.resolveSharedWithSettings Dhall.defaultInputSettings parsed
 
-        _ <- Dhall.typecheckWithSettings Dhall.defaultInputSettings resolved
+        _ <-
+            Core.throws
+                =<< State.evalStateT
+                    (Dhall.Import.typecheckLoaded parsed resolved)
+                    status
 
-        let normalized = Dhall.normalizeWithSettings Dhall.defaultInputSettings resolved
+        let normalized =
+                Dhall.Import.normalizeLoaded status shared :: Expr Src Void
 
         pure (normalized, status)
 

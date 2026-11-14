@@ -76,7 +76,8 @@ import qualified Data.Foldable
 #else
 import Control.Monad.IO.Class (MonadIO (..))
 import Dhall.Core             (Directory (..), File (..), URL (..))
-import Lens.Micro.Mtl         (zoom)
+import Lens.Micro        (Lens', set)
+import Lens.Micro.Extras (view)
 
 import qualified Data.Foldable
 import qualified Data.Text.Encoding
@@ -118,6 +119,12 @@ loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith = Dhall.Import.loadWith
 
 #else
+-- Field zoom for Status.  The library helper is not exported.
+zoom :: Monad m => Lens' s a -> State.StateT a m r -> State.StateT s m r
+zoom l action = State.StateT $ \s -> do
+    (r, a) <- State.runStateT action (view l s)
+    return (r, set l a s)
+
 loadWith :: Expr Src Import -> StateT Status IO (Expr Src Void)
 loadWith expr = do
     zoom Dhall.Import.remote (State.put mockRemote)

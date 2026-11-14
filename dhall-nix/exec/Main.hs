@@ -12,15 +12,15 @@ import Options.Generic   (Generic, ParseRecord, type (<?>) (..))
 import System.Exit       (ExitCode (..))
 
 import qualified Control.Exception
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text.IO
 import qualified Data.Version
 import qualified Dhall
 import qualified Dhall.Import
 import qualified Dhall.Nix
 import qualified Dhall.Parser
-import qualified Dhall.TypeCheck
 import qualified GHC.IO.Encoding
-import qualified Nix.Pretty
+import Nix.Pretty ()
 import qualified Options.Generic
 import qualified Paths_dhall_nix
 import qualified System.Exit
@@ -29,6 +29,8 @@ import qualified System.IO
 data Options = Options
     { version :: Bool
         <?> "Display version"
+    , noRemote :: Bool
+        <?> "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
     } deriving (Generic, ParseRecord)
 
 main :: IO ()
@@ -48,15 +50,31 @@ main = handle (Dhall.detailed (do
         Left  err  -> Control.Exception.throwIO err
         Right expr -> return expr
 
-    expr' <- Dhall.Import.load expr
-    case Dhall.TypeCheck.typeOf expr' of
+    let remoteImportMode =
+            if unHelpful noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus ".")
+                { Dhall.Import._remoteImportMode = remoteImportMode }
+
+    (expr', status') <-
+        State.runStateT (Dhall.Import.loadWith expr) status
+
+    inferred <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded expr expr')
+            status'
+
+    case inferred of
         Left  err -> Control.Exception.throwIO err
         Right _   -> return ()
 
     nix <- case Dhall.Nix.dhallToNix expr' of
         Left err  -> Control.Exception.throwIO err
         Right nix -> return nix
-    print (Nix.Pretty.prettyNix nix) ))
+    print (Dhall.Nix.prettyNix nix) ))
 
 handle :: IO a -> IO a
 handle = Control.Exception.handle handler

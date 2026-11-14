@@ -6,6 +6,7 @@
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
@@ -72,7 +73,6 @@ module Main where
 
 import Control.Applicative              (empty, optional, (<|>))
 import Control.Monad.IO.Class           (MonadIO (..))
-import Control.Monad.Morph              (hoist)
 import Control.Monad.Trans.Class        (lift)
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson                       (FromJSON)
@@ -84,8 +84,8 @@ import Dhall.Crypto                     (SHA256Digest (..))
 import Dhall.Import                     (Status (..), stack)
 import Dhall.Parser                     (Src)
 import GHC.Generics                     (Generic)
-import Lens.Micro                       (rewriteOf)
-import Lens.Micro.Mtl                   (zoom)
+import Lens.Micro                       (Lens', rewriteOf, set)
+import Lens.Micro.Extras                (view)
 import Network.URI                      (URI (..), URIAuth (..))
 import Nix.Expr.Shorthands              ((@.), (@@))
 import Nix.Expr.Types                   (NExpr)
@@ -147,6 +147,7 @@ data GitHub = GitHub
     , file :: FilePath
     , source :: Bool
     , document :: Bool
+    , noRemote :: Bool
     }
 
 data Directory = Directory
@@ -156,6 +157,7 @@ data Directory = Directory
     , source :: Bool
     , document :: Bool
     , fixedOutputDerivations :: Bool
+    , noRemote :: Bool
     }
 
 data NixPrefetchGit = NixPrefetchGit
@@ -220,6 +222,13 @@ parseFixedOutputDerivations =
         <>  Options.help "Translate Dhall remote imports to Nix fixed-output derivations"
         )
 
+parseNoRemote :: Parser Bool
+parseNoRemote =
+    Options.switch
+        (   Options.long "no-remote"
+        <>  Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+        )
+
 parseName :: Parser (Maybe Text)
 parseName =
     optional
@@ -271,6 +280,8 @@ parseGitHub = do
 
     document <- parseDocument
 
+    noRemote <- parseNoRemote
+
     return GitHub{..}
 
 parseDirectory :: Parser Directory
@@ -286,6 +297,8 @@ parseDirectory = do
     document <- parseDocument
 
     fixedOutputDerivations <- parseFixedOutputDerivations
+
+    noRemote <- parseNoRemote
 
     return Directory{..}
 
@@ -314,6 +327,12 @@ toListWith _  Nothing  = [ ]
 
 nub :: Ord a => [a] -> [a]
 nub = Foldl.fold Foldl.nub
+
+-- Run a StateT action on one field of the surrounding state.
+zoom :: Monad m => Lens' s a -> State.StateT a m r -> State.StateT s m r
+zoom l action = State.StateT $ \s -> do
+    (r, a) <- State.runStateT action (view l s)
+    return (r, set l a s)
 
 {-| The Nixpkgs support for Dhall essentially replaces all remote imports with
     cache hits, but doing so implies that all remote imports must be protected
@@ -347,7 +366,7 @@ findExternalDependencies expression = do
 
     parent :| _ <- zoom stack State.get
 
-    child <- hoist liftIO (Dhall.Import.chainImport parent import_)
+    child <- State.mapStateT liftIO (Dhall.Import.chainImport parent import_)
 
     let Import{ importHashed, importMode } = Dhall.Import.chainedImport child
 
@@ -380,7 +399,7 @@ findExternalDependencies expression = do
 
             parsedExpression <- Dhall.Core.throws (Dhall.Parser.exprFromText filepath expressionText)
 
-            zoom stack (State.modify (NonEmpty.cons child))
+            zoom stack (State.modify' (NonEmpty.cons child))
 
             findExternalDependencies parsedExpression
 
@@ -610,7 +629,7 @@ makeNixFunctionParams buildDhallFuncName nixDependencies =
         )
 
 githubToNixpkgs :: GitHub -> IO ()
-githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document } = do
+githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, directory, file, source, document, noRemote } = do
     URI{ uriScheme, uriAuthority = Just URIAuth{ uriUserInfo, uriRegName, uriPort }, uriPath, uriQuery, uriFragment } <- do
         case URI.parseAbsoluteURI (Text.unpack uri) of
             Nothing -> die (RepositoryIsNotAValidURI uri)
@@ -727,7 +746,14 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    let status = Dhall.Import.emptyStatus baseDirectory
+    let remoteImportMode =
+            if noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus baseDirectory)
+                { Dhall.Import._remoteImportMode = remoteImportMode }
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 
@@ -762,7 +788,7 @@ githubToNixpkgs GitHub{ name, uri, rev = maybeRev, hash, fetchSubmodules, direct
     Prettyprint.Text.putDoc ((Nix.Pretty.prettyNix nixExpression) <> "\n")
 
 directoryToNixpkgs :: Directory -> IO ()
-directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations } = do
+directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutputDerivations, noRemote } = do
     let finalName =
             case name of
                 Nothing -> Turtle.format fp (Turtle.dirname directory)
@@ -781,7 +807,14 @@ directoryToNixpkgs Directory{ name, directory, file, source, document, fixedOutp
 
     expression <- Dhall.Core.throws (Dhall.Parser.exprFromText expressionFile expressionText)
 
-    let status = Dhall.Import.emptyStatus (Turtle.directory expressionFile)
+    let remoteImportMode =
+            if noRemote
+            then Dhall.Import.RejectRemoteImports
+            else Dhall.Import.AllowRemoteImports
+
+    let status =
+            (Dhall.Import.emptyStatus (Turtle.directory expressionFile))
+                { Dhall.Import._remoteImportMode = remoteImportMode }
 
     dependencies <- Turtle.reduce Foldl.nub (State.evalStateT (findExternalDependencies expression) status)
 

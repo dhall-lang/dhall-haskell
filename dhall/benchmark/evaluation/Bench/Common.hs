@@ -127,9 +127,17 @@ resolveWithSettingsCold settings parsed =
 resolveTypecheckNormalize
     :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveTypecheckNormalize settings parsed = do
-    resolved <- Dhall.resolveWithSettings settings parsed
-    _ <- either throw pure (TypeCheck.typeOf resolved)
-    pure (Core.normalize resolved)
+    (resolved, shared, status) <- Dhall.resolveSharedWithSettings settings parsed
+    _ <- either throw pure
+        (TypeCheck.typeWith (settings ^. Dhall.startingContext) resolved)
+    pure (normalizeShared status shared resolved)
+  where
+    normalizeShared status shared resolved =
+        case settings ^. Dhall.normalizer of
+            Nothing ->
+                Import.normalizeLoaded status shared
+            Just _ ->
+                Core.normalizeWith (settings ^. Dhall.normalizer) resolved
 
 -- | Mode D: cold library resolve, then typecheck and normalize under a fresh
 -- cache. Synthetic substitution-heavy end-to-end path (import + typecheck + NF).

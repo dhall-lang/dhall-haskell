@@ -26,6 +26,8 @@ Data-Files:
 Extra-Source-Files:
     CHANGELOG.md
     benchmark/deep-nested-large-record/**/*.dhall
+    benchmark/evaluation/diamond_import/**/*.dhall
+    benchmark/evaluation/diamond_import_transitive/**/*.dhall
     benchmark/evaluation/k8s/*.dhall
     benchmark/evaluation/large1/**/*.dhall
     benchmark/evaluation/large2/**/*.dhall
@@ -33,6 +35,7 @@ Extra-Source-Files:
     benchmark/evaluation/large4/**/*.dhall
     benchmark/evaluation/large5/**/*.dhall
     benchmark/evaluation/large6/**/*.dhall
+    benchmark/evaluation/large7/**/*.dhall
     benchmark/evaluation/normalize/**/*.dhall
     benchmark/evaluation/prelude_import/**/*.dhall
     benchmark/parser/**/*.dhall
@@ -193,7 +196,14 @@ Source-Repository head
     Location: https://github.com/dhall-lang/dhall-haskell/tree/master/dhall
 
 Flag with-http
-  Description: Include support for importing dhall modules from HTTP URLs
+  Description:
+    Include support for importing dhall modules from HTTP URLs.
+    Nixpkgs compiles dhall with this flag disabled so the binary has no
+    HTTP client. Hashed URL imports still resolve when Nix has already
+    placed them in the semantic cache; a cache miss fails inside Dhall
+    instead of opening a connection. The runtime --no-remote flag is
+    separate: it rejects remote code, Text, and Bytes imports before the
+    cache is consulted, and the HTTP client stays linked.
   Default:     True
   Manual:      True
 
@@ -205,6 +215,15 @@ Flag use-http-client-tls
 
 Flag cross
   Description: Disable TemplateHaskell to make cross-compiling easier
+  Default:     False
+  Manual:      True
+
+Flag javascript
+  Description:
+    Select the JavaScript FFI sources (ghcjs-src).  Cabal also selects
+    those sources automatically for arch(javascript) / impl(ghcjs); this
+    flag exists so cabal2nix, which evaluates the Cabal file on the
+    build platform, generates the JS dependency set.
   Default:     False
   Manual:      True
 
@@ -234,19 +253,16 @@ Common common
         deepseq                                    < 1.6 ,
         Diff >=0.2 && <2.1 ,
         directory                   >= 1.3.0.0  && < 1.4 ,
-        dotgen                      >= 0.4.2    && < 0.5 ,
         either                      >= 5        && < 5.1,
         exceptions                  >= 0.8.3    && < 0.11,
         filepath                    >= 1.4      && < 1.6 ,
         half                        >= 0.2.2.3  && < 0.4 ,
-        haskeline                   >= 0.7.2.1  && < 0.9 ,
+        haskeline                   >= 0.8      && < 0.9 ,
         hashable                    >= 1.2      && < 1.6 ,
         indexed-traversable                        < 0.2 ,
         microlens                   >= 0.4.14.0 && < 0.6 ,
-        microlens-mtl               >= 0.1      && < 0.3 ,
         -- megaparsec follows SemVer: https://github.com/mrkkrp/megaparsec/issues/469#issuecomment-927918469
         megaparsec                  >= 8        && < 10  ,
-        mmorph                                     < 1.3 ,
         mtl                         >= 2.2.1    && < 2.4 ,
         network-uri                 >= 2.6      && < 2.7 ,
         optparse-applicative        >= 0.14.0.0 && < 0.20,
@@ -255,7 +271,6 @@ Common common
         prettyprinter               >= 1.7.0    && < 1.8 ,
         prettyprinter-ansi-terminal >= 1.1.2    && < 1.2 ,
         pretty-simple                              < 4.2 ,
-        repline                     >= 0.4.0.0  && < 0.5 ,
         serialise                   >= 0.2.0.0  && < 0.3 ,
         scientific                  >= 0.3.0.0  && < 0.4 ,
         template-haskell            >= 2.13.0.0 && < 2.25,
@@ -265,11 +280,14 @@ Common common
         th-lift-instances           >= 0.1.13   && < 0.2 ,
         time >=1.9 && <1.17,
         transformers                >= 0.5.2.0  && < 0.7 ,
-        unix-compat                 >= 0.4.2    && < 0.8 ,
         unordered-containers        >= 0.1.3.0  && < 0.3 ,
         vector                      >= 0.11.0.0 && < 0.14
 
-    if !os(windows)
+    if !(arch(javascript) || impl(ghcjs) || flag(javascript))
+      Build-Depends:
+        unix-compat                 >= 0.4.2    && < 0.8
+
+    if !os(windows) && !arch(javascript) && !impl(ghcjs) && !flag(javascript)
       Build-Depends:
         unix                        >= 2.7      && < 2.9 ,
 
@@ -290,11 +308,8 @@ Common common
 Library
     Import: common
     Hs-Source-Dirs: src
-    if impl(ghcjs)
+    if flag(javascript) || impl(ghcjs) || arch(javascript)
       Hs-Source-Dirs: ghcjs-src
-      Build-Depends:
-        ghcjs-base ,
-        ghcjs-xhr
     else
       Hs-Source-Dirs: ghc-src
       Build-Depends:
@@ -330,6 +345,7 @@ Library
         TupleSections
         TypeFamilies
         TypeOperators
+        UndecidableInstances
         UnicodeSyntax
     if !flag(cross)
         Other-Extensions:
@@ -338,6 +354,8 @@ Library
     Exposed-Modules:
         Dhall
         Dhall.Binary
+        Dhall.Scope
+        Dhall.Bounded
         Dhall.Context
         Dhall.Core
         Dhall.Core.DAG
@@ -387,6 +405,7 @@ Library
         Dhall.Normalize
         Dhall.Parser.Combinators
         Dhall.Pretty.Internal
+        Dhall.Repl.Line
         Dhall.Syntax
         Dhall.Syntax.Binding
         Dhall.Syntax.Chunks
@@ -428,7 +447,10 @@ Executable dhall
     Hs-Source-Dirs: dhall
     Main-Is: Main.hs
     Build-Depends: dhall
-    GHC-Options: -rtsopts
+    -- The evaluation-time limit is a watcher thread.  The non-threaded RTS
+    -- does not run that watcher while type-checking, normalization, or
+    -- pretty-printing keeps the capability busy.
+    GHC-Options: -rtsopts -threaded
     Default-Language: Haskell2010
 
 Test-Suite tasty
@@ -437,6 +459,7 @@ Test-Suite tasty
     Hs-Source-Dirs: tests
     Main-Is: Dhall/Test/Main.hs
     Other-Modules:
+        Dhall.Test.Bounded
         Dhall.Test.CacheFill
         Dhall.Test.CSE
         Dhall.Test.DelayedNormalization
@@ -455,12 +478,14 @@ Test-Suite tasty
         Dhall.Test.QuickCheck
         Dhall.Test.Regression
         Dhall.Test.Regression.TextReplaceNoop
+        Dhall.Test.Repl
         Dhall.Test.Schemas
         Dhall.Test.SemanticHash
         Dhall.Test.SemisemanticCache
         Dhall.Test.Substitution
         Dhall.Test.Tutorial
         Dhall.Test.TypeInference
+        Dhall.Test.TypingContext
         Dhall.Test.Util
     if !flag(cross)
         Other-Modules:
@@ -474,6 +499,7 @@ Test-Suite tasty
         http-client                                    ,
         http-client-tls                                ,
         tls                                            ,
+        process                   >= 1.6      && < 1.7 ,
         QuickCheck >=2.14 && <2.20,
         quickcheck-instances      >= 0.3.12   && < 0.5 ,
         special-values                           < 0.2 ,
@@ -485,6 +511,9 @@ Test-Suite tasty
         tasty-silver                             < 3.4 ,
         temporary                 >= 1.2.1    && < 1.4 ,
         turtle                    >= 1.6      && < 1.7 ,
+    if os(windows)
+      Build-Depends:
+        Win32                     >= 2.6      && < 2.16
     if impl(ghc >= 9.6)
            build-depends: crypton-connection
     else
@@ -516,7 +545,7 @@ Benchmark dhall-parser
     Default-Language: Haskell2010
     Other-Extensions:
         TypeApplications
-    Ghc-Options: -rtsopts
+    GHC-Options: -rtsopts -threaded
 
 Benchmark deep-nested-large-record
     Import: common
@@ -527,6 +556,7 @@ Benchmark deep-nested-large-record
         dhall                                         ,
         tasty-bench               >= 0.4      && < 0.6,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded
 
 Benchmark evaluation
     Import: common
@@ -535,8 +565,9 @@ Benchmark evaluation
     Main-Is: Main.hs
     Other-Modules:
         Bench.Common
+        Bench.GraphMetrics
+        Bench.ImportOverhead
         Bench.ImportTrees
-        Bench.Semisemantic
         Bench.Substitutions
     Build-Depends:
         dhall                                         ,
@@ -544,3 +575,4 @@ Benchmark evaluation
         temporary                 >= 1.2.1    && < 1.4 ,
         time                                          ,
     Default-Language: Haskell2010
+    GHC-Options: -rtsopts -threaded

@@ -12,6 +12,7 @@ module Dhall.Parser.Expression where
 
 import Control.Applicative     (Alternative (..), liftA2, optional)
 import Data.Foldable           (foldl')
+import Data.Functor            (void)
 import Data.List.NonEmpty      (NonEmpty (..))
 import Data.Text               (Text)
 import Dhall.Src               (Src (..))
@@ -73,7 +74,8 @@ srcAnd parser = do
 noted :: Parser (Expr Src a) -> Parser (Expr Src a)
 noted parser = do
     before      <- Text.Megaparsec.getSourcePos
-    (!tokens, !e) <- Text.Megaparsec.match parser
+    -- Do not force `e`: large Natural literals must stay lazy at WHNF parse.
+    (!tokens, e) <- Text.Megaparsec.match parser
     after       <- Text.Megaparsec.getSourcePos
     let src₀ = Src before after tokens
     case e of
@@ -250,10 +252,72 @@ shebang = do
 
     return ()
 
+-- | Succeed when the next token can start an 'import-expression'.
+--
+-- This is a cheap classifier used so that application arguments are not parsed
+-- under 'try'.  Inner failures must stick; only the “is there another argument?”
+-- decision may backtrack.
+peekImportExpressionStart :: Parser ()
+peekImportExpressionStart = do
+    _ <- Text.Megaparsec.notFollowedBy Text.Megaparsec.eof
+    c <- Text.Megaparsec.anySingle
+    case c of
+        '"'  -> return ()
+        '{'  -> return ()
+        '['  -> return ()
+        '('  -> return ()
+        '<'  -> return ()
+        '`'  -> return ()
+        '\'' -> void (char '\'')
+        '+'  -> void (Text.Megaparsec.satisfy Char.isDigit)
+        '-'  ->
+                void (Text.Megaparsec.satisfy Char.isDigit)
+            <|> void (text "Infinity")
+        '.'  -> void (char '/') <|> (void (char '.') *> void (char '/'))
+        '/'  -> Text.Megaparsec.notFollowedBy (char '/' <|> char '\\')
+        '~'  -> void (char '/')
+        _    | Char.isDigit c ->
+            return ()
+        _    | identHead c -> do
+            rest <- Dhall.Parser.Combinators.takeWhile identTail
+            let name = Data.Text.cons c rest
+            Control.Monad.guard (not (isContinuatorKeyword name))
+        _ ->
+            empty
+  where
+    identHead ch = Char.isAlpha ch || ch == '_'
+    identTail ch = Char.isAlphaNum ch || ch == '_' || ch == '-' || ch == '/'
+
+    isContinuatorKeyword name =
+            name == "then" || name == "else" || name == "in"
+        ||  name == "with" || name == "as" || name == "using"
+        ||  name == "let" || name == "if" || name == "merge"
+        ||  name == "Some" || name == "toMap" || name == "assert"
+        ||  name == "forall"
+
+-- | Start of a selector after @.@: a field name, @{…}@ projection, or @(…)@.
+peekSelectorStart :: Parser ()
+peekSelectorStart =
+        void (char '{')
+    <|> void (char '(')
+    <|> void (char '`')
+    <|> void (Text.Megaparsec.satisfy (\ch -> Char.isAlpha ch || ch == '_'))
+
 -- | Given a parser for imports,
 parsers :: forall a. Parser a -> Parsers a
 parsers embedded = Parsers{..}
   where
+    expectClose closer extraMsg missingMsg = do
+        atClose <- (True <$ Text.Megaparsec.lookAhead closer) <|> pure False
+        atComma <- (True <$ Text.Megaparsec.lookAhead _comma) <|> pure False
+        case (atClose, atComma) of
+            (True, _) -> return ()
+            (_, True) -> fail extraMsg
+            _         -> fail missingMsg
+
+    expectCloseBrace extraMsg missingMsg =
+        expectClose _closeBrace extraMsg missingMsg
+
     completeExpression_ =
             whitespace
         *>  expression
@@ -270,7 +334,7 @@ parsers embedded = Parsers{..}
         d <- optional (do
             _colon
 
-            src2 <- src nonemptyWhitespace
+            src2 <- src (requireWhsp1 ":")
 
             e <- expression
 
@@ -300,18 +364,31 @@ parsers embedded = Parsers{..}
                 ]
             ) <?> "expression"
       where
+        typedBinder = do
+            src0 <- src whitespace
+            atRecord <- (True <$ Text.Megaparsec.lookAhead _openBrace) <|> pure False
+            Control.Monad.when atRecord $
+                fail "Binders require a variable name before the type, not a record pattern"
+            atColon <- (True <$ Text.Megaparsec.lookAhead _colon) <|> pure False
+            Control.Monad.when atColon $
+                fail "Missing binder variable name"
+            atClose <- (True <$ Text.Megaparsec.lookAhead _closeParens) <|> pure False
+            Control.Monad.when atClose $
+                fail "Missing binder variable name"
+            a <- boundLabel <?> "binder variable name"
+            src1 <- src whitespace
+            _colon <?> "':' in binder"
+            src2 <- src (requireWhsp1 ":")
+            b <- expression
+            whitespace
+            _closeParens
+            return (src0, a, src1, src2, b)
+
         alternative0 = do
             cs <- _lambda
             whitespace
             _openParens
-            src0 <- src whitespace
-            a <- boundLabel
-            src1 <- src whitespace
-            _colon
-            src2 <- src nonemptyWhitespace
-            b <- expression
-            whitespace
-            _closeParens
+            (src0, a, src1, src2, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -357,14 +434,7 @@ parsers embedded = Parsers{..}
 
         alternative3 = do
             cs <- try (_forall <* whitespace <* _openParens)
-            whitespace
-            a <- boundLabel
-            whitespace
-            _colon
-            nonemptyWhitespace
-            b <- expression
-            whitespace
-            _closeParens
+            (_, a, _, _, b) <- typedBinder
             whitespace
             cs' <- _arrow
             whitespace
@@ -373,7 +443,7 @@ parsers embedded = Parsers{..}
 
         alternative4 = do
             try (_assert *> whitespace *> _colon)
-            nonemptyWhitespace
+            requireWhsp1 ":"
             a <- expression
             return (Assert a)
 
@@ -423,7 +493,7 @@ parsers embedded = Parsers{..}
 
                     let alternative5B1 = do
                             _colon
-                            nonemptyWhitespace
+                            requireWhsp1 ":"
                             case (shallowDenote a, a0Info) of
                                 (ListLit Nothing [], _) -> do
                                     b <- expression
@@ -472,39 +542,66 @@ parsers embedded = Parsers{..}
     makeOperatorExpression firstSubExpression operatorParser subExpression = do
             a <- firstSubExpression
 
-            bs <- Text.Megaparsec.many $ do
-                (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
+            -- After a subexpression the next token is often a delimiter
+            -- (`,`, `}`, `)`, `:`, ...).  Skip the operator `many` loop in
+            -- that case instead of trying every precedence layer.
+            mc <- Text.Megaparsec.lookAhead $ optional $ try $ do
+                whitespace
+                Text.Megaparsec.anySingle
 
-                r0 <- subExpression
+            case mc of
+                Just c | isOperatorStart c -> parseOperators a
+                _                          -> return a
+          where
+            parseOperators a = do
+                bs <- Text.Megaparsec.many $ do
+                    (Src _ _ textOp, op0) <- srcAnd (try (whitespace *> operatorParser))
 
-                let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
-                        Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
-                    -- We shouldn't hit this branch if things are working, but
-                    -- that is not enforced in the types
-                    l `op` r =
-                        l `op0` r
+                    r0 <- subExpression
 
-                return (`op` r0)
+                    let l@(Note (Src startL _ textL) _) `op` r@(Note (Src _ endR textR) _) =
+                            Note (Src startL endR (textL <> textOp <> textR)) (l `op0` r)
+                        -- We shouldn't hit this branch if things are working, but
+                        -- that is not enforced in the types
+                        l `op` r =
+                            l `op0` r
 
-            return (foldl' (\x f -> f x) a bs)
+                    return (`op` r0)
+
+                return (foldl' (\x f -> f x) a bs)
+
+            isOperatorStart c =
+                    c == '=' || c == '≡'
+                ||  c == '?'
+                ||  c == '|'
+                ||  c == '+'
+                ||  c == '#'
+                ||  c == '&'
+                ||  c == '/' || c == '∧' || c == '⫽' || c == '⩓'
+                ||  c == '*'
+                ||  c == '!'
 
     operatorParsers :: [Parser (Expr s a -> Expr s a -> Expr s a)]
     operatorParsers =
-        [ Equivalent . Specify        <$> _equivalent   <* whitespace
-        , ImportAlt                   <$ _importAlt     <* nonemptyWhitespace
-        , BoolOr                      <$ _or            <* whitespace
-        , NaturalPlus                 <$ _plus          <* nonemptyWhitespace
-        , TextAppend                  <$ _textAppend    <* whitespace
-        , ListAppend                  <$ _listAppend    <* whitespace
-        , BoolAnd                     <$ _and           <* whitespace
-        , (\cs -> Combine (Specify cs) Nothing)         <$> _combine <* whitespace
-        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> _prefer  <* whitespace
-        , CombineTypes . Specify      <$> _combineTypes <* whitespace
-        , NaturalTimes                <$ _times         <* whitespace
+        [ Equivalent . Specify        <$> startsWith (\c -> c == '=' || c == '≡') _equivalent   <* whitespace
+        , ImportAlt                   <$ startsWith (== '?') _importAlt     <* nonemptyWhitespace
+        , BoolOr                      <$ startsWith (== '|') _or            <* whitespace
+        , NaturalPlus                 <$ startsWith (== '+') _plus          <* nonemptyWhitespace
+        , TextAppend                  <$ startsWith (== '+') _textAppend    <* whitespace
+        , ListAppend                  <$ startsWith (== '#') _listAppend    <* whitespace
+        , BoolAnd                     <$ startsWith (== '&') _and           <* whitespace
+        , (\cs -> Combine (Specify cs) Nothing)         <$> startsWith (\c -> c == '/' || c == '∧') _combine <* whitespace
+        , (\cs -> Prefer (Specify cs) PreferFromSource) <$> startsWith (\c -> c == '/' || c == '⫽') _prefer  <* whitespace
+        , CombineTypes . Specify      <$> startsWith (\c -> c == '/' || c == '⩓') _combineTypes <* whitespace
+        , NaturalTimes                <$ startsWith (== '*') _times         <* whitespace
         -- Make sure that `==` is not actually the prefix of `===`
-        , BoolEQ                      <$ try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '=')) <* whitespace
-        , BoolNE                      <$ _notEqual      <* whitespace
+        , BoolEQ                      <$ startsWith (== '=') (try (_doubleEqual <* Text.Megaparsec.notFollowedBy (char '='))) <* whitespace
+        , BoolNE                      <$ startsWith (== '!') _notEqual      <* whitespace
         ]
+      where
+        startsWith predicate parser = do
+            c <- Text.Megaparsec.lookAhead Text.Megaparsec.anySingle
+            if predicate c then parser else empty
 
     applicationExpression = snd <$> applicationExpressionWithInfo
 
@@ -512,14 +609,18 @@ parsers embedded = Parsers{..}
     applicationExpressionWithInfo = do
             let alternative0 = do
                     try (_merge *> nonemptyWhitespace)
-
-                    a <- importExpression_ <* nonemptyWhitespace
-
+                    a <- importExpression_
+                            <* (nonemptyWhitespace <?> "second argument to ❰merge❱")
                     return (\b -> Merge a b Nothing, Just "second argument to ❰merge❱")
 
             let alternative1 = do
-                    try (_Some *> nonemptyWhitespace)
-
+                    -- Also commit at EOF so a bare `Some` reports a missing argument.
+                    try (_Some *> (nonemptyWhitespace <|> Text.Megaparsec.eof))
+                    colonNext <-
+                            (True <$ Text.Megaparsec.lookAhead _colon)
+                        <|> pure False
+                    Control.Monad.when colonNext $
+                        fail "Some is a constructor and cannot be annotated like a type; write Some <value> : Optional T"
                     return (Some, Just "argument to ❰Some❱")
 
             let alternative2 = do
@@ -544,8 +645,9 @@ parsers embedded = Parsers{..}
 
             a <- adapt (noted importExpression_)
 
-            bs <- Text.Megaparsec.many . try $ do
-                (!sep, _) <- Text.Megaparsec.match nonemptyWhitespace
+            bs <- Text.Megaparsec.many $ do
+                (!sep, _) <- try (Text.Megaparsec.match
+                    (nonemptyWhitespace <* Text.Megaparsec.lookAhead peekImportExpressionStart))
                 b <- importExpression_
                 return (sep, b)
 
@@ -619,15 +721,46 @@ parsers embedded = Parsers{..}
 
                     result
 
-            b <- Text.Megaparsec.many (try (whitespace *> _dot *> alternatives))
+            b <- Text.Megaparsec.many $ do
+                    try (whitespace *> _dot <* Text.Megaparsec.lookAhead (whitespace *> peekSelectorStart))
+                    alternatives
 
             return (foldl' (\e k -> k e) a b) )
 
     primitiveExpression =
             noted
-                ( choice
+                ( do
+                    mc <- Text.Megaparsec.lookAhead (optional Text.Megaparsec.anySingle)
+                    case mc of
+                        Just '"'  -> textLiteral
+                        Just '\'' -> textLiteral
+                        Just '{'  -> alternative04
+                        Just '<'  -> unionType
+                        Just '['  -> listLiteral
+                        Just '`'  -> alternative37
+                        Just '('  -> empty
+                        Just '+'  -> signedNumeric
+                        Just '-'  -> signedNumeric <|> alternative09
+                        Just '0'  -> zeroNumeric
+                        Just c | '1' <= c && c <= '9' ->
+                            unsignedNumeric
+                        Just c | identifierStart c ->
+                            alternative37 <|> alternative09 <|> builtin
+                        _ ->
+                            originalChoice
+                )
+            <|> alternative38
+          where
+            identifierStart c =
+                    ('\x41' <= c && c <= '\x5A')
+                ||  ('\x61' <= c && c <= '\x7A')
+                ||  c == '_'
+
+            originalChoice =
+                choice
                     [ bytesLiteral
                     , temporalLiteral
+                    , decimalNatural
                     , alternative00
                     , alternative01
                     , alternative02
@@ -639,9 +772,37 @@ parsers embedded = Parsers{..}
                     , alternative09
                     , builtin
                     ]
-                )
-            <|> alternative38
-          where
+
+            -- Digit-led literals, excluding `0x"` bytes and signed integers.
+            unsignedNumeric =
+                choice
+                    [ temporalLiteral
+                    , decimalNatural
+                    , alternative00
+                    ]
+
+            -- `0`, `0x`/`0b` naturals, `0x"` bytes, dates, and `0.5`-style doubles.
+            zeroNumeric =
+                choice
+                    [ bytesLiteral
+                    , temporalLiteral
+                    , alternative00
+                    , alternative01
+                    ]
+
+            -- Leading `+`/`-`: doubles, integers, and numeric temporal offsets.
+            signedNumeric =
+                choice
+                    [ temporalLiteral
+                    , alternative00
+                    , alternative02
+                    ]
+
+            -- Tried before doubles so large naturals are not scanned as floats.
+            -- `1.0` still reaches alternative00; `0` / `0x` / `0b` reach alternative01.
+            decimalNatural =
+                fmap NaturalLit (try nonZeroDecimalNaturalLiteral)
+
             alternative00 = do
                 n <- getOffset
                 a <- try doubleLiteral
@@ -651,7 +812,7 @@ parsers embedded = Parsers{..}
                 return (DoubleLit (DhallDouble b))
 
             alternative01 = do
-                a <- try naturalLiteral
+                a <- zeroPrefixedNaturalLiteral
                 return (NaturalLit a)
 
             alternative02 = do
@@ -787,7 +948,7 @@ parsers embedded = Parsers{..}
                 return (Chunks [(mempty, e)] mempty)
 
             unescapedCharacterFast = do
-                t <- Text.Megaparsec.takeWhile1P Nothing predicate
+                t <- spanWhile1 predicate
                 return (Chunks [] t)
               where
                 predicate c =
@@ -813,6 +974,7 @@ parsers embedded = Parsers{..}
                     , carriageReturn
                     , tab
                     , unicode
+                    , fail "Invalid escape sequence"
                     ]
                 return (Chunks [] (Data.Text.singleton c))
               where
@@ -906,7 +1068,7 @@ parsers embedded = Parsers{..}
                     return mempty
 
                 unescapedCharacterFast = do
-                    a <- Text.Megaparsec.takeWhile1P Nothing predicate
+                    a <- spanWhile1 predicate
                     b <- singleQuoteContinue
                     return (Chunks [] a <> b)
                   where
@@ -972,7 +1134,7 @@ parsers embedded = Parsers{..}
         whitespace
         return (RecordLit mempty)
 
-    emptyRecordType = return (Record mempty)
+    emptyRecordType = Text.Megaparsec.lookAhead _closeBrace *> return (Record mempty)
 
     nonEmptyRecordTypeOrLiteral firstSrc0 = do
             let nonEmptyRecordType = do
@@ -982,7 +1144,7 @@ parsers embedded = Parsers{..}
                         _colon
                         return (s, a)
 
-                    firstKeySrc2 <- src nonemptyWhitespace
+                    firstKeySrc2 <- src (requireWhsp1 ":")
 
                     b <- expression
 
@@ -997,7 +1159,7 @@ parsers embedded = Parsers{..}
 
                         _colon
 
-                        src2 <- src nonemptyWhitespace
+                        src2 <- src (requireWhsp1 ":")
 
                         d <- expression
 
@@ -1008,6 +1170,10 @@ parsers embedded = Parsers{..}
                     _ <- optional (whitespace *> _comma)
                     whitespace
 
+                    expectCloseBrace
+                        "Unexpected extra ',' in record type"
+                        "Missing ',' in record type"
+
                     m <- toMap ((a, RecordField (Just firstSrc0) b (Just firstKeySrc1) (Just firstKeySrc2)) : e)
 
                     return (Record m)
@@ -1016,7 +1182,7 @@ parsers embedded = Parsers{..}
                     firstSrc0' <- case maybeSrc of
                         Just src0 -> return src0
                         Nothing -> src whitespace
-                    firstLabel <- anyLabelOrSome
+                    firstLabel <- anyLabelOrSomeOrKeywordHint
                     firstSrc1 <- src whitespace
 
                     let parseLabelWithWhsp = try $ do
@@ -1034,7 +1200,7 @@ parsers embedded = Parsers{..}
 
                             lastSrc2 <- src whitespace
 
-                            value <- expression
+                            value <- expression <?> "record field value"
 
                             let cons (s0, key, s1) (key', values) =
                                     (key, RecordField (Just s0) (RecordLit [ (key', values) ]) (Just s1) Nothing)
@@ -1049,16 +1215,27 @@ parsers embedded = Parsers{..}
                                 (s0, x, s1) :| [] -> return (x, RecordField (Just s0) (Var (V x 0)) (Just s1) Nothing)
                                 _       -> empty
 
+                    atColon <- (True <$ Text.Megaparsec.lookAhead _colon) <|> pure False
+                    Control.Monad.when atColon $
+                        fail "Record literals use '=' for field values, not ':'; ':' starts a record type"
+
                     (normalRecordEntry <|> punnedEntry) <* whitespace
 
             let nonEmptyRecordLiteral = do
                     a <- keysValue (Just firstSrc0)
 
-                    as <- many (try (_comma *> keysValue Nothing))
+                    as <- many $ do
+                        try (_comma <* Text.Megaparsec.lookAhead
+                            (whitespace *> void (anyLabelOrSome <|> bareKeyword)))
+                        keysValue Nothing
 
                     _ <- optional (whitespace *> _comma)
 
                     whitespace
+
+                    expectCloseBrace
+                        "Unexpected extra ',' in record literal"
+                        "Missing ',' in record literal"
 
                     let combine k = liftA2 $ \rf rf' -> makeRecordField $ Combine mempty (Just k)
                                                             (recordFieldValue rf')
@@ -1080,14 +1257,23 @@ parsers embedded = Parsers{..}
 
                     whitespace
 
-                    b <- optional (_colon *> nonemptyWhitespace *> expression <* whitespace)
+                    b <- optional (_colon *> requireWhsp1 ":" *> expression <* whitespace)
 
                     return (a, b)
 
-            let nonEmptyUnionType = do
-                    kv <- try (optional (_bar *> whitespace) *> unionTypeEntry)
+            let emptyUnionType = do
+                    try (optional (_bar *> whitespace) *> _closeAngle)
 
-                    kvs <- many (try (_bar *> whitespace *> unionTypeEntry))
+                    return (Union mempty)
+
+            let nonEmptyUnionType = do
+                    _ <- optional (_bar *> whitespace)
+
+                    kv <- unionTypeEntry
+
+                    kvs <- many $ do
+                        try (_bar *> whitespace <* Text.Megaparsec.lookAhead (void anyLabelOrSome))
+                        unionTypeEntry
 
                     m <- toMap (kv : kvs)
 
@@ -1097,37 +1283,43 @@ parsers embedded = Parsers{..}
 
                     return (Union m)
 
-            let emptyUnionType = do
-                    try (optional (_bar *> whitespace) *> _closeAngle)
-
-                    return (Union mempty)
-
-            nonEmptyUnionType <|> emptyUnionType ) <?> "literal"
+            emptyUnionType <|> nonEmptyUnionType ) <?> "literal"
 
     listLiteral = (do
             _openBracket
 
             whitespace
 
+            _ <- optional (_comma *> whitespace)
+
+            let emptyListLiteral = do
+                    _closeBracket
+
+                    return (ListLit Nothing mempty)
+
             let nonEmptyListLiteral = do
-                    a <- try (optional (_comma *> whitespace) *> expression)
+                    a <- expression
 
                     whitespace
 
-                    as <- many (try (_comma *> whitespace *> expression) <* whitespace)
+                    as <- many $ do
+                        try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBracket)
+                        b <- expression
+                        whitespace
+                        return b
 
                     _ <- optional (_comma *> whitespace)
+
+                    expectClose
+                        _closeBracket
+                        "Unexpected extra ',' in list literal"
+                        "Missing ',' in list literal"
 
                     _closeBracket
 
                     return (ListLit Nothing (Data.Sequence.fromList (a : as)))
 
-            let emptyListLiteral = do
-                    try (optional (_comma *> whitespace) *> _closeBracket)
-
-                    return (ListLit Nothing mempty)
-
-            nonEmptyListLiteral <|> emptyListLiteral) <?> "literal"
+            emptyListLiteral <|> nonEmptyListLiteral) <?> "literal"
 
 {-| Parse an environment variable import
 

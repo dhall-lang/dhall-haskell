@@ -130,6 +130,7 @@ import Data.List.NonEmpty   (NonEmpty ((:|)))
 import Data.Version         (showVersion)
 import Data.Void            (Void)
 import Dhall.Core           (DhallDouble (..), Expr)
+import Dhall.Import         (RemoteImportMode (..))
 import Dhall.Parser         (Src)
 import Dhall.Toml.Utils     (fileToDhall)
 import Toml.Parser          (TomlParseError)
@@ -359,6 +360,7 @@ data Options = Options
     { input :: Maybe FilePath
     , output :: Maybe FilePath
     , schemaFile :: FilePath
+    , remoteImportMode :: RemoteImportMode
     }
 
 parserInfo :: Options.ParserInfo Options
@@ -388,6 +390,16 @@ parserInfo = Options.info
             <> Options.action "file"
             <> Options.metavar "SCHEMA"
             )
+        remoteImportMode <-
+            fmap
+                (\noRemote ->
+                    if noRemote then RejectRemoteImports else AllowRemoteImports
+                )
+                (Options.switch
+                    (  Options.long "no-remote"
+                    <> Options.help "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+                    )
+                )
         pure Options {..}
 
 tomlToDhallMain :: IO ()
@@ -400,7 +412,7 @@ tomlToDhallMain = do
 
     toml <- Core.throws (first InvalidToml (Toml.Parser.parse inputText))
 
-    schema <- fileToDhall schemaFile
+    schema <- fileToDhall remoteImportMode schemaFile
 
     dhall <- Core.throws (tomlToDhall schema toml)
 

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Convert tasty-bench --csv output to github-action-benchmark JSON.
 
-tasty-bench writes:
+tasty-bench writes time, and with +RTS -T also memory:
 
-    Name,Mean (ps),2*Stdev (ps)
-    All.large3.evaluation,30000000000000,1200000000000
+    Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+    All.large3.evaluation,30000000000000,1200000000000,1000,0,4096
 
-github-action-benchmark's customSmallerIsBetter tool expects:
+github-action-benchmark's customSmallerIsBetter tool stores one number per
+name, so memory is emitted as extra rows:
 
-    [{"name": "large3.evaluation", "unit": "ms", "value": 30000, "range": "1200"}]
+    [
+      {"name": "large3.evaluation", "unit": "ms", "value": 30000, "range": "1200"},
+      {"name": "large3.evaluation.allocated", "unit": "bytes", "value": 1000},
+      {"name": "large3.evaluation.copied", "unit": "bytes", "value": 0},
+      {"name": "large3.evaluation.peak", "unit": "bytes", "value": 4096}
+    ]
 """
 
 from __future__ import annotations
@@ -18,18 +24,24 @@ import csv
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List
 
 PS_PER_MS = 1e9
 ALL_PREFIX = "All."
+# tasty-bench adds these when the executable is run with +RTS -T.
+MEMORY_COLUMNS = (
+    ("Allocated", "allocated"),
+    ("Copied", "copied"),
+    ("Peak Memory", "peak"),
+)
 
 
-def row_to_entry(row: Dict[str, str]) -> Optional[Dict[str, Any]]:
+def row_to_entries(row: Dict[str, str]) -> List[Dict[str, Any]]:
     name = (row.get("Name") or "").strip()
     mean = (row.get("Mean (ps)") or "").strip()
     stdev = (row.get("2*Stdev (ps)") or "").strip()
     if not name or not mean:
-        return None
+        return []
     if name.startswith(ALL_PREFIX):
         name = name[len(ALL_PREFIX) :]
     mean_ms = float(mean) / PS_PER_MS
@@ -42,7 +54,19 @@ def row_to_entry(row: Dict[str, str]) -> Optional[Dict[str, Any]]:
         range_ms = float(stdev) / PS_PER_MS
         entry["range"] = f"{range_ms:.6g}"
         entry["extra"] = f"2*Stdev = {range_ms:.6g} ms"
-    return entry
+    entries = [entry]
+    for column, suffix in MEMORY_COLUMNS:
+        raw = (row.get(column) or "").strip()
+        if not raw:
+            continue
+        entries.append(
+            {
+                "name": f"{name}.{suffix}",
+                "unit": "bytes",
+                "value": int(raw),
+            }
+        )
+    return entries
 
 
 def convert(paths: Iterable[Path]) -> List[Dict[str, Any]]:
@@ -50,9 +74,7 @@ def convert(paths: Iterable[Path]) -> List[Dict[str, Any]]:
     for path in paths:
         with path.open(newline="") as handle:
             for row in csv.DictReader(handle):
-                entry = row_to_entry(row)
-                if entry is not None:
-                    entries.append(entry)
+                entries.extend(row_to_entries(row))
     return entries
 
 

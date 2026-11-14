@@ -641,3 +641,29 @@ The tests check, among other things:
 
 These comparisons let the implementation change its storage without silently
 changing Dhall semantics, text, or standard hashes.
+
+## 17. Shared imports on current main
+
+Import resolution keeps main's twin expression. Each use of a loaded import
+is an `Embed` of an `ImportRef`, and `normalizeLoaded` evaluates that twin
+in an `Environment` whose bottom frame is `imports`. The frame resolves
+every reference to one thunk, so a file imported twice is evaluated once.
+
+`quote` / `quoteGraph` still intern the resulting normal form into a
+`CoreGraph`. `dhall hash` uses `normalizeLoaded` (or a cached integrity
+normal form) and then `alphaNormalize`. It does not re-walk the fully
+inlined tree through `normalizeGraph`.
+
+Typechecking a resolved file uses `typeWithImports`: child imports stay
+embedded, and their types come from `_importTypes`. The value environment
+is rebuilt with `imports` at the bottom so conversion can force a child
+only when it needs the value.
+
+`quoteBounded` is the `--max-output-size` path. It emits predefined
+functions as ordinary variables (`Natural/fold`, `List/head`, and the
+rest), matching `quoteGraph`.
+
+Default semantic hashes stay on legacy tree CBOR. `encodeGraph` is
+experimental and is not what `hashExpression` writes. Speed caches stay
+off unless a caller passes `cacheOnConfig`.
+

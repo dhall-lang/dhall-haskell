@@ -4,6 +4,7 @@ import Control.Monad     (unless)
 import Data.Text         (unpack)
 import Data.Void         (Void)
 import Dhall.DhallToToml (dhallToToml)
+import Dhall.Import      (RemoteImportMode (..))
 import Dhall.Parser      (Src)
 import Dhall.Toml.Utils  (fileToDhall)
 import Dhall.TomlToDhall (tomlToDhall)
@@ -70,7 +71,7 @@ testDhallToToml :: String -> TestTree
 testDhallToToml prefix = Test.Tasty.HUnit.testCase prefix $ do
     let inputFile = prefix ++ ".dhall"
     let outputFile = prefix ++ ".toml"
-    resolvedExpression <- fileToDhall inputFile
+    resolvedExpression <- fileToDhall AllowRemoteImports inputFile
     actualValue <-
         Core.throws (dhallToToml resolvedExpression)
     inputText <- Data.Text.IO.readFile outputFile
@@ -90,11 +91,11 @@ testTomlToDhall prefix = Test.Tasty.HUnit.testCase prefix $ do
     toml <- case Toml.Parser.parse inputText of
         Left tomlErr -> fail $ show tomlErr
         Right toml -> return toml
-    schema <- fileToDhall schemaFile
+    schema <- fileToDhall AllowRemoteImports schemaFile
     actualValue <- case tomlToDhall schema toml of
         Left err -> fail $ show err
         Right val -> return val
-    expectedValue <- fileToDhall outputFile
+    expectedValue <- fileToDhall AllowRemoteImports outputFile
     let message = "Conversion to Dhall did not generate the expected output"
     assertDhallEq message (Core.normalize expectedValue) actualValue
 

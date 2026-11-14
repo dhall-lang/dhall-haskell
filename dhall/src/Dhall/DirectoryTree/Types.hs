@@ -23,6 +23,10 @@ module Dhall.DirectoryTree.Types
     , Mode(..)
     , Access(..)
 
+    , FileMode
+    , UserID
+    , GroupID
+
     , setFileMode
     , prettyFileMode
 
@@ -41,13 +45,24 @@ import Dhall.Marshal.Decode
     , InterpretOptions (..)
     )
 import Dhall.Syntax             (Expr (..), FieldSelection (..), Var (..))
+
+#if defined(javascript_HOST_ARCH)
+import Data.Bits     ((.&.))
+import Data.Word     (Word32)
+#else
 import System.PosixCompat.Types (GroupID, UserID)
+
+import qualified System.PosixCompat.Files as Posix
+#endif
 
 import qualified Data.Text                as Text
 import qualified Dhall.Marshal.Decode     as Decode
-import qualified System.PosixCompat.Files as Posix
 
-#ifdef mingw32_HOST_OS
+#if defined(javascript_HOST_ARCH)
+type FileMode = Word32
+type UserID = Word32
+type GroupID = Word32
+#elif defined(mingw32_HOST_OS)
 import Control.Monad            (unless)
 import Data.Word                (Word32)
 import System.IO                (hPutStrLn, stderr)
@@ -125,7 +140,9 @@ data User
 
 instance FromDhall User
 
-#ifdef mingw32_HOST_OS
+#if defined(javascript_HOST_ARCH)
+-- UserID is Word32
+#elif defined(mingw32_HOST_OS)
 instance FromDhall UserID where
     autoWith normalizer = Unsafe.Coerce.unsafeCoerce <$> autoWith @Word32 normalizer
 #else
@@ -141,7 +158,9 @@ data Group
 
 instance FromDhall Group
 
-#ifdef mingw32_HOST_OS
+#if defined(javascript_HOST_ARCH)
+-- GroupID is Word32
+#elif defined(mingw32_HOST_OS)
 instance FromDhall GroupID where
     autoWith normalizer = Unsafe.Coerce.unsafeCoerce <$> autoWith @Word32 normalizer
 #else
@@ -213,7 +232,9 @@ accessDecoder = Decode.genericAutoWithInputNormalizer Decode.defaultInterpretOpt
 -- match the desired file mode. On all other OS it is identical to
 -- `Posix.setFileMode` as it is assumed to work correctly.
 setFileMode :: FilePath -> FileMode -> IO ()
-#ifdef mingw32_HOST_OS
+#if defined(javascript_HOST_ARCH)
+setFileMode _ _ = return ()
+#elif defined(mingw32_HOST_OS)
 setFileMode fp mode = do
     Posix.setFileMode fp mode
     mode' <- Posix.fileMode <$> Posix.getFileStatus fp
@@ -235,32 +256,59 @@ setFileMode fp mode = Posix.setFileMode fp mode
 prettyFileMode :: FileMode -> String
 prettyFileMode mode = userPP <> groupPP <> otherPP
     where
-        userPP :: String
         userPP =
-            isBitSet 'r' Posix.ownerReadMode <>
-            isBitSet 'w' Posix.ownerWriteMode <>
-            isBitSet 'x' Posix.ownerExecuteMode
+            isBitSet 'r' ownerReadMode <>
+            isBitSet 'w' ownerWriteMode <>
+            isBitSet 'x' ownerExecuteMode
 
-        groupPP :: String
         groupPP =
-            isBitSet 'r' Posix.groupReadMode <>
-            isBitSet 'w' Posix.groupWriteMode <>
-            isBitSet 'x' Posix.groupExecuteMode
+            isBitSet 'r' groupReadMode <>
+            isBitSet 'w' groupWriteMode <>
+            isBitSet 'x' groupExecuteMode
 
-        otherPP :: String
         otherPP =
-            isBitSet 'r' Posix.otherReadMode <>
-            isBitSet 'w' Posix.otherWriteMode <>
-            isBitSet 'x' Posix.otherExecuteMode
+            isBitSet 'r' otherReadMode <>
+            isBitSet 'w' otherWriteMode <>
+            isBitSet 'x' otherExecuteMode
 
-        isBitSet :: Char -> FileMode -> String
-        isBitSet c mask = if mask `Posix.intersectFileModes` mode /= Posix.nullFileMode
+        isBitSet c mask = if mask `intersectFileModes` mode /= nullFileMode
             then [c]
             else "-"
 
+#if defined(javascript_HOST_ARCH)
+nullFileMode, ownerReadMode, ownerWriteMode, ownerExecuteMode,
+  groupReadMode, groupWriteMode, groupExecuteMode,
+  otherReadMode, otherWriteMode, otherExecuteMode :: FileMode
+nullFileMode     = 0
+ownerReadMode    = 0o400
+ownerWriteMode   = 0o200
+ownerExecuteMode = 0o100
+groupReadMode    = 0o040
+groupWriteMode   = 0o020
+groupExecuteMode = 0o010
+otherReadMode    = 0o004
+otherWriteMode   = 0o002
+otherExecuteMode = 0o001
+
+intersectFileModes :: FileMode -> FileMode -> FileMode
+intersectFileModes = (.&.)
+#else
+nullFileMode = Posix.nullFileMode
+ownerReadMode = Posix.ownerReadMode
+ownerWriteMode = Posix.ownerWriteMode
+ownerExecuteMode = Posix.ownerExecuteMode
+groupReadMode = Posix.groupReadMode
+groupWriteMode = Posix.groupWriteMode
+groupExecuteMode = Posix.groupExecuteMode
+otherReadMode = Posix.otherReadMode
+otherWriteMode = Posix.otherWriteMode
+otherExecuteMode = Posix.otherExecuteMode
+intersectFileModes = Posix.intersectFileModes
+#endif
+
 -- | Is setting metadata supported on this platform or not.
 isMetadataSupported :: Bool
-#ifdef mingw32_HOST_OS
+#if defined(mingw32_HOST_OS) || defined(javascript_HOST_ARCH)
 isMetadataSupported = False
 #else
 isMetadataSupported = True

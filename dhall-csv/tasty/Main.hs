@@ -5,6 +5,7 @@ module Main (main) where
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Core        (Expr)
+import Dhall.Import      (RemoteImportMode (..))
 import Dhall.CsvToDhall
     ( defaultConversion
     , dhallFromCsv
@@ -53,7 +54,7 @@ dhallToCsvGolden = do
         [ Silver.goldenVsAction
             (takeBaseName dhallFile)
             csvFile
-            (Dhall.Csv.codeToValue Nothing =<< Data.Text.IO.readFile dhallFile)
+            (Dhall.Csv.codeToValue AllowRemoteImports Nothing =<< Data.Text.IO.readFile dhallFile)
             Dhall.Csv.Util.encodeCsvDefault
         | dhallFile <- dhallFiles
         , let csvFile = replaceExtension dhallFile ".csv"
@@ -95,7 +96,7 @@ textToCsv hasHeader txt =
 
 getSchemaAndCsv :: FilePath -> Bool -> Text -> IO (Expr Src Void, [Data.Csv.NamedRecord])
 getSchemaAndCsv csvFile hasHeader schema = do
-    finalSchema <- typeCheckSchemaExpr id =<< resolveSchemaExpr schema
+    finalSchema <- typeCheckSchemaExpr id =<< resolveSchemaExpr AllowRemoteImports schema
     csv <- textToCsv hasHeader =<< Data.Text.IO.readFile csvFile
     return (finalSchema, csv)
 

@@ -53,6 +53,7 @@ module Dhall.Eval (
   , quote
   , quoteInRun
   , quoteGraph
+  , quoteBounded
   , envNames
   , countNames
   , conv
@@ -63,6 +64,7 @@ module Dhall.Eval (
   , Environment(..)
   , skip
   , extend
+  , imports
   , envId
   , Val
   , valId
@@ -174,19 +176,25 @@ import Dhall.Core.DAG.Node (NodeId (..))
 import qualified Dhall.Core.DAG as DAG
 import qualified Dhall.Set
 import qualified Dhall.Syntax  as Syntax
+import qualified Control.Monad.Trans.State.Strict as State
 import qualified Text.Printf   as Printf
 
 -- | Evaluation environment. The 'Val' in 'Extend' is intentionally lazy:
 -- unused @let@-bound values (and unused lambda arguments, once instantiated)
--- are not forced. The environment spine ('Empty'/'Skip'/'Extend') is strict.
+-- are not forced. The environment spine is strict. 'Imports' sits at the
+-- bottom and resolves an 'Embed' to one shared thunk; looking a reference up
+-- does not force the other imports.
 data Environment a
     = Empty
+    | Imports !(a -> Val a) {-# UNPACK #-} !EnvId
     | Skip   !(Environment a) {-# UNPACK #-} !Text {-# UNPACK #-} !EnvId
     | Extend !(Environment a) {-# UNPACK #-} !Text (Val a) {-# UNPACK #-} !EnvId
 
 instance (Show a, Show (Val a -> Val a)) => Show (Environment a) where
     showsPrec _ Empty =
         showString "Empty"
+    showsPrec d (Imports _ _) =
+        showParen (d > 10) (showString "Imports _")
     showsPrec d (Skip env x _) =
         showParen (d > 10) $
             showString "Skip " . showsPrec 11 env . showChar ' ' . showsPrec 11 x
@@ -205,8 +213,13 @@ skip env x = Skip env x (freshEnvId x)
 extend :: Environment a -> Text -> Val a -> Environment a
 extend env x v = Extend env x v (freshEnvId v)
 
+-- | Bottom frame that resolves each 'Embed' to one shared thunk.
+imports :: (a -> Val a) -> Environment a
+imports resolve = Imports resolve (freshEnvId resolve)
+
 envId :: Environment a -> EnvId
 envId Empty             = EnvId 0
+envId (Imports _ i)     = i
 envId (Skip _ _ i)      = i
 envId (Extend _ _ _ i)  = i
 
@@ -457,6 +470,7 @@ closureClosed (Closure _ env _ _) = envClosed env
 
 envClosed :: Environment a -> Bool
 envClosed Empty              = True
+envClosed (Imports _ _)      = True
 envClosed (Skip env _ _)     = envClosed env
 envClosed (Extend env _ v _) = envClosed env && valClosed v
 
@@ -863,6 +877,7 @@ countEnvironment :: Text -> Environment a -> Int
 countEnvironment x = go (0 :: Int)
   where
     go !acc Empty               = acc
+    go  acc (Imports _ _)       = acc
     go  acc (Skip env x' _)     = go (if x == x' then acc + 1 else acc) env
     go  acc (Extend env x' _ _) = go (if x == x' then acc + 1 else acc) env
 
@@ -906,6 +921,12 @@ vVar env0 (V x i0) = go env0 i0
             if i == 0 then VVar x (countEnvironment x env) else go env (i - 1)
         | otherwise =
             go env i
+    go (Imports _ _) i
+        | i == 0
+        , Just builtin <- HashMap.lookup x unboundBuiltinValues =
+            builtin
+        | otherwise =
+            VVar x (negate i - 1)
     go Empty 0
         | Just builtin <- HashMap.lookup x unboundBuiltinValues =
             builtin
@@ -1271,12 +1292,14 @@ evalImpl !env t0 =
             case (evalImpl env t, evalImpl env u) of
                 (VBoolLit True, u')       -> u'
                 (t', VBoolLit True)       -> t'
+                (VBoolLit b, VBoolLit c)  -> VBoolLit (b == c)
                 (t', u') | convImpl env t' u' -> VBoolLit True
                 (t', u')                  -> VBoolEQ t' u'
         BoolNE t u ->
             case (evalImpl env t, evalImpl env u) of
                 (VBoolLit False, u')      -> u'
                 (t', VBoolLit False)      -> t'
+                (VBoolLit b, VBoolLit c)  -> VBoolLit (b /= c)
                 (t', u') | convImpl env t' u' -> VBoolLit False
                 (t', u')                  -> VBoolNE t' u'
         BoolIf b t f ->
@@ -1420,7 +1443,7 @@ evalImpl !env t0 =
         ImportAlt t _ ->
             evalImpl env t
         Embed a ->
-            VEmbed a
+            embedded env a
   where
     evalChunks :: Chunks Void a -> VChunks a
     evalChunks (Chunks xys z) = foldr' cons nil xys
@@ -1739,8 +1762,17 @@ data Names
 
 envNames :: Environment a -> Names
 envNames Empty              = EmptyNames
+envNames (Imports _ _)      = EmptyNames
 envNames (Skip   env x _  ) = Bind (envNames env) x
 envNames (Extend env x _ _) = Bind (envNames env) x
+
+-- | Resolve an 'Embed' by walking to 'Imports'.  'Empty' leaves it embedded,
+--   which is what 'normalize' does for an import-free expression.
+embedded :: Environment a -> a -> Val a
+embedded (Imports resolve _) a = resolve a
+embedded (Skip env _ _) a = embedded env a
+embedded (Extend env _ _ _) a = embedded env a
+embedded Empty a = VEmbed a
 
 countNames :: Text -> Names -> Int
 countNames x = go 0
@@ -2461,6 +2493,366 @@ unboundBuiltinValues =
         [ (primName prim, primVal prim)
         | prim <- unboundPrimitives
         ]
+
+-- | Quote a value, stopping after about @budget@ bytes of rendered text.
+--
+--   This is a different function from 'quote'.  @--max-output-size@ passes its
+--   byte count here.  The count is not a syntax-node count: each node spends
+--   a few bytes of syntax plus the length of any name or literal it prints.
+--   A long text literal therefore spends many bytes in one node, and quoting
+--   stops once the estimate reaches @budget@.  'Dhall.Bounded.prettyBounded'
+--   still cuts the real rendering at that same count, because layout
+--   (indentation and line breaks) is not known yet.
+--
+--   Returns the expression and whether it was cut short.  A cut-off expression
+--   ends in @\"…\"@ and does not force the parts that were not quoted: lambda
+--   bodies, the tail of a list, later record fields, and the payload of
+--   @Some@.  Strict fields are already evaluated; this only limits how much
+--   of them is turned into syntax.
+--
+--   A budget that cannot pay for one node yields the truncation marker.
+quoteBounded
+    :: forall a. Eq a => Int -> Names -> Val a -> (Expr Void a, Bool)
+quoteBounded budget env0 val0 =
+    State.evalState (go env0 val0) budget
+  where
+    -- Punctuation, spaces, and a typical bit of indentation.  Payload length
+    -- is charged separately, so this is not a guess at the size of a literal.
+    syntacticBytes :: Int
+    syntacticBytes = 4
+
+    marker :: Expr Void a
+    marker = TextLit (Chunks [] "…")
+
+    -- | Pay @cost@ bytes.  'False' means this node does not fit and must not
+    --   be forced.
+    charge :: Int -> State.State Int Bool
+    charge cost = do
+        left <- State.get
+        if left <= 0 || cost > left
+            then return False
+            else do
+                State.put (left - cost)
+                return True
+
+    go :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    go env val = do
+        paid <- charge syntacticBytes
+        if not paid
+            then return (marker, True)
+            else step env val
+
+    child :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    child = go
+
+    both
+        :: Names
+        -> Val a
+        -> Val a
+        -> (Expr Void a -> Expr Void a -> Expr Void a)
+        -> State.State Int (Expr Void a, Bool)
+    both env t u k = do
+        (t', cutT) <- child env t
+        if cutT
+            then return (k t' marker, True)
+            else do
+                (u', cutU) <- child env u
+                return (k t' u', cutU)
+
+    one :: Names -> Val a -> (Expr Void a -> Expr Void a) -> State.State Int (Expr Void a, Bool)
+    one env t k = do
+        (t', cut) <- child env t
+        return (k t', cut)
+
+    qAppE :: Names -> Expr Void a -> Val a -> State.State Int (Expr Void a, Bool)
+    qAppE _ t VPrimVar = return (t, False)
+    qAppE env t u = do
+        (u', cut) <- child env u
+        return (App t u', cut)
+
+    apps :: Names -> Expr Void a -> [Val a] -> State.State Int (Expr Void a, Bool)
+    apps _ t [] = return (t, False)
+    apps env t (u : us) = do
+        (t', cut) <- qAppE env t u
+        if cut
+            then return (t', True)
+            else do
+                (t'', cut') <- apps env t' us
+                return (t'', cut')
+
+    quoteSeq :: Names -> Seq (Val a) -> State.State Int (Seq (Expr Void a), Bool)
+    quoteSeq env ts = case Sequence.viewl ts of
+        EmptyL -> return (Sequence.empty, False)
+        x :< xs -> do
+            left <- State.get
+            if left <= 0
+                then return (Sequence.singleton marker, True)
+                else do
+                    (x', cut) <- child env x
+                    if cut
+                        then return (Sequence.singleton x', True)
+                        else do
+                            (xs', cut') <- quoteSeq env xs
+                            return (x' Sequence.<| xs', cut')
+
+    freshName :: Names -> Text -> (Text, Val a)
+    freshName env x = (x, VVar x (countNames x env))
+
+    primitiveExpr :: Names -> Text -> Expr Void a
+    primitiveExpr env name = Var (V name (countNames name env))
+
+    primAppsE :: Names -> Text -> [Val a] -> State.State Int (Expr Void a, Bool)
+    primAppsE env name args = apps env (primitiveExpr env name) args
+
+    step :: Names -> Val a -> State.State Int (Expr Void a, Bool)
+    step env val = case val of
+        VConst k -> return (Const k, False)
+        VVar x i -> do
+            paid <- charge (Text.length x)
+            if paid
+                then return (Var (V x (countNames x env - i - 1)), False)
+                else return (marker, True)
+        VPrimVar -> return (marker, True)
+        VApp t u -> do
+            (t', cut) <- child env t
+            if cut then return (t', True) else qAppE env t' u
+        VLam a closure@(Closure x _ _ _) -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Lam mempty (Syntax.makeFunctionBinding x a') marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (instantiate closure v)
+                    return (Lam mempty (Syntax.makeFunctionBinding x a') b', cut')
+        VHLam i t -> case i of
+            Typed x a -> do
+                (a', cut) <- child env a
+                if cut
+                    then return (Lam mempty (Syntax.makeFunctionBinding x a') marker, True)
+                    else do
+                        let v = snd (freshName env x)
+                        (b', cut') <- child (Bind env x) (t v)
+                        return (Lam mempty (Syntax.makeFunctionBinding x a') b', cut')
+            Prim -> child env (t VPrimVar)
+            NaturalSubtractZero ->
+                return (App (primitiveExpr env "Natural/subtract") (NaturalLit 0), False)
+            TextReplaceEmpty ->
+                return (App (primitiveExpr env "Text/replace") (TextLit (Chunks [] "")), False)
+            TextReplaceEmptyArgument replacement ->
+                qAppE env (App (primitiveExpr env "Text/replace") (TextLit (Chunks [] ""))) replacement
+        VPi a closure@(Closure x _ _ _) -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Pi mempty x a' marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (instantiate closure v)
+                    return (Pi mempty x a' b', cut')
+        VHPi x a b -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Pi mempty x a' marker, True)
+                else do
+                    let v = snd (freshName env x)
+                    (b', cut') <- child (Bind env x) (b v)
+                    return (Pi mempty x a' b', cut')
+        VBool -> return (Bool, False)
+        VBoolLit b -> return (BoolLit b, False)
+        VBoolAnd t u -> both env t u BoolAnd
+        VBoolOr t u -> both env t u BoolOr
+        VBoolEQ t u -> both env t u BoolEQ
+        VBoolNE t u -> both env t u BoolNE
+        VBoolIf t u v -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            (v', c3) <- child env v
+            return (BoolIf t' u' v', c1 || c2 || c3)
+        VBytes -> return (Bytes, False)
+        VBytesLit b -> return (BytesLit b, False)
+        VNatural -> return (Natural, False)
+        VNaturalLit n -> do
+            paid <- charge (decimalDigits (fromIntegral n :: Integer))
+            if paid
+                then return (NaturalLit n, False)
+                else return (marker, True)
+        VNaturalFold a t u v -> primAppsE env "Natural/fold" [a, t, u, v]
+        VNaturalBuild t -> primAppsE env "Natural/build" [t]
+        VNaturalIsZero t -> primAppsE env "Natural/isZero" [t]
+        VNaturalEven t -> primAppsE env "Natural/even" [t]
+        VNaturalOdd t -> primAppsE env "Natural/odd" [t]
+        VNaturalToInteger t -> primAppsE env "Natural/toInteger" [t]
+        VNaturalShow t -> primAppsE env "Natural/show" [t]
+        VNaturalSubtract x y -> primAppsE env "Natural/subtract" [x, y]
+        VNaturalPlus t u -> both env t u NaturalPlus
+        VNaturalTimes t u -> both env t u NaturalTimes
+        VInteger -> return (Integer, False)
+        VIntegerLit n -> do
+            paid <- charge (decimalDigits n)
+            if paid
+                then return (IntegerLit n, False)
+                else return (marker, True)
+        VIntegerClamp t -> primAppsE env "Integer/clamp" [t]
+        VIntegerNegate t -> primAppsE env "Integer/negate" [t]
+        VIntegerShow t -> primAppsE env "Integer/show" [t]
+        VIntegerToDouble t -> primAppsE env "Integer/toDouble" [t]
+        VDouble -> return (Double, False)
+        VDoubleLit n -> return (DoubleLit n, False)
+        VDoubleShow t -> primAppsE env "Double/show" [t]
+        VText -> return (Text, False)
+        VTextLit (VChunks xys z) -> do
+            let payload =
+                    2 + Text.length z + sum [ Text.length txt | (txt, _) <- xys ]
+            paid <- charge payload
+            if not paid
+                then return (marker, True)
+                else do
+                    (pieces, cut) <- quoteChunks env xys
+                    return (TextLit (Chunks pieces z), cut)
+        VTextAppend t u -> both env t u TextAppend
+        VTextShow t -> primAppsE env "Text/show" [t]
+        VTextReplace a b c -> primAppsE env "Text/replace" [a, b, c]
+        VDate -> return (Date, False)
+        VDateLiteral d -> return (DateLiteral d, False)
+        VDateShow t -> primAppsE env "Date/show" [t]
+        VTime -> return (Time, False)
+        VTimeLiteral hh mm ss frac p -> return (TimeLiteral hh mm ss frac p, False)
+        VTimeShow t -> primAppsE env "Time/show" [t]
+        VTimeZone -> return (TimeZone, False)
+        VTimeZoneLiteral z -> return (TimeZoneLiteral z, False)
+        VTimeZoneShow t -> primAppsE env "TimeZone/show" [t]
+        VList t -> apps env List [t]
+        VListLit ma ts -> do
+            (ma', cutA) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            (ts', cutS) <- quoteSeq env ts
+            return (ListLit ma' ts', cutA || cutS)
+        VListAppend t u -> both env t u ListAppend
+        VListBuild a t -> primAppsE env "List/build" [a, t]
+        VListFold a l t u v -> primAppsE env "List/fold" [a, l, t, u, v]
+        VListLength a t -> primAppsE env "List/length" [a, t]
+        VListHead a t -> primAppsE env "List/head" [a, t]
+        VListLast a t -> primAppsE env "List/last" [a, t]
+        VListIndexed a t -> primAppsE env "List/indexed" [a, t]
+        VListReverse a t -> primAppsE env "List/reverse" [a, t]
+        VOptional a -> apps env Optional [a]
+        VSome t -> one env t Some
+        VNone t -> apps env None [t]
+        VRecord m -> do
+            (m', cut) <- quoteMap env m
+            return (Record m', cut)
+        VRecordLit m -> do
+            (m', cut) <- quoteMap env m
+            return (RecordLit m', cut)
+        VUnion m -> do
+            (m', cut) <- quoteMaybeMap env m
+            return (Union m', cut)
+        VCombine mk t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Combine mempty mk t' u', c1 || c2)
+        VCombineTypes t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (CombineTypes mempty t' u', c1 || c2)
+        VPrefer t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Prefer mempty PreferFromSource t' u', c1 || c2)
+        VMerge t u ma -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            (ma', c3) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            return (Merge t' u' ma', c1 || c2 || c3)
+        VToMap t ma -> do
+            (t', c1) <- child env t
+            (ma', c2) <- case ma of
+                Nothing -> return (Nothing, False)
+                Just a -> do
+                    (a', c) <- child env a
+                    return (Just a', c)
+            return (ToMap t' ma', c1 || c2)
+        VShowConstructor t -> one env t ShowConstructor
+        VField t k -> one env t (\e -> Field e (Syntax.makeFieldSelection k))
+        VInject m k Nothing -> do
+            (m', cut) <- quoteMaybeMap env m
+            return (Field (Union m') (Syntax.makeFieldSelection k), cut)
+        VInject m k (Just t) -> do
+            (m', cut) <- quoteMaybeMap env m
+            if cut
+                then return (Field (Union m') (Syntax.makeFieldSelection k), True)
+                else qAppE env (Field (Union m') (Syntax.makeFieldSelection k)) t
+        VProject t p -> do
+            (t', c1) <- child env t
+            case p of
+                Left s -> return (Project t' (Left (Dhall.Set.toList s)), c1)
+                Right u -> do
+                    (u', c2) <- child env u
+                    return (Project t' (Right u'), c1 || c2)
+        VAssert t -> one env t Assert
+        VEquivalent t u -> do
+            (t', c1) <- child env t
+            (u', c2) <- child env u
+            return (Equivalent mempty t' u', c1 || c2)
+        VWith e ks v -> do
+            (e', c1) <- child env e
+            (v', c2) <- child env v
+            return (With e' ks v', c1 || c2)
+        VEmbed a -> return (Embed a, False)
+
+    quoteChunks _ [] = return ([], False)
+    quoteChunks env ((txt, bit) : rest) = do
+        (e, cut) <- child env bit
+        if cut
+            then return ([(txt, e)], True)
+            else do
+                (rest', cut') <- quoteChunks env rest
+                return ((txt, e) : rest', cut')
+
+    -- A record field prints at least the label and a separator.
+    fieldCost k = Text.length k + 4
+
+    quoteMap env m = goPairs [] (Map.toList m)
+      where
+        goPairs acc [] = return (Map.fromList (reverse acc), False)
+        goPairs acc ((k, v) : rest) = do
+            paid <- charge (fieldCost k)
+            if not paid
+                then return (Map.fromList (reverse acc), True)
+                else do
+                    (e, cut) <- child env v
+                    let acc' = (k, Syntax.makeRecordField e) : acc
+                    if cut
+                        then return (Map.fromList (reverse acc'), True)
+                        else goPairs acc' rest
+
+    quoteMaybeMap env m = goPairs [] (Map.toList m)
+      where
+        goPairs acc [] = return (Map.fromList (reverse acc), False)
+        goPairs acc ((k, mv) : rest) = do
+            paid <- charge (fieldCost k)
+            if not paid
+                then return (Map.fromList (reverse acc), True)
+                else case mv of
+                    Nothing -> goPairs ((k, Nothing) : acc) rest
+                    Just v -> do
+                        (e, cut) <- child env v
+                        let acc' = (k, Just e) : acc
+                        if cut
+                            then return (Map.fromList (reverse acc'), True)
+                            else goPairs acc' rest
+
+decimalDigits :: Integer -> Int
+decimalDigits n
+    | n < 0 = 1 + decimalDigits (-n)
+    | n < 10 = 1
+    | otherwise = 1 + decimalDigits (n `div` 10)
 
 -- | Normalize an expression in an environment of values. Any variable pointing out of
 --   the environment is treated as opaque free variable.

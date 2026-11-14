@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # CLI timings matching prelude_import.code.
-# Run from this directory.
+# Timed on an empty cache and then again on that cache.
+# Runnable from any directory.
 set -euo pipefail
 
-time_dhall() {
-    local file=$1
-    echo "=== dhall --file ${file} ==="
-    time dhall --file "${file}" > /dev/null
-    echo
-}
+HERE=$(cd "$(dirname "$0")" && pwd)
+cd "${HERE}"
+DHALL="${DHALL:-dhall}"
+# shellcheck source=../cli-cache.sh
+source "${HERE}/../cli-cache.sh"
+dhall_cli_cache_begin
 
-time_dhall prelude-code.dhall
+dhall_cli_time_cold_warm prelude-code "${DHALL}" --file prelude-code.dhall

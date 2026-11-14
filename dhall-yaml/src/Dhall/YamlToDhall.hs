@@ -14,6 +14,7 @@ import Data.ByteString   (ByteString)
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Core        (Expr)
+import Dhall.Import (RemoteImportMode (..))
 import Dhall.JSONToDhall
     ( CompileError (..)
     , Conversion (..)
@@ -34,11 +35,14 @@ import qualified Data.YAML.Aeson
 data Options = Options
     { schema     :: Maybe Text
     , conversion :: Conversion
+    , remoteImportMode :: RemoteImportMode
     } deriving Show
 
 defaultOptions :: Maybe Text -> Options
 defaultOptions schema = Options {..}
-  where conversion = defaultConversion
+  where
+    conversion = defaultConversion
+    remoteImportMode = AllowRemoteImports
 
 data YAMLCompileError = YAMLCompileError CompileError
 
@@ -55,7 +59,7 @@ dhallFromYaml Options{..} yaml = do
 
   finalSchema <-
       case schema of
-          Just text -> resolveSchemaExpr text
+          Just text -> resolveSchemaExpr remoteImportMode text
           Nothing   -> return (schemaToDhallType (inferSchema value))
 
   expr <- typeCheckSchemaExpr YAMLCompileError finalSchema

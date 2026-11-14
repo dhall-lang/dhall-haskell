@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # CLI timings matching the large3 Haskell groups.
-# Run from this directory. These can take tens of seconds.
+# Each file is timed on an empty cache and then again on that cache.
+# Runnable from any directory. These can take tens of seconds.
 set -euo pipefail
 
-time_dhall() {
-    local file=$1
-    echo "=== dhall --file ${file} ==="
-    time dhall --file "${file}" > /dev/null
-    echo
-}
+HERE=$(cd "$(dirname "$0")" && pwd)
+cd "${HERE}"
+DHALL="${DHALL:-dhall}"
+# shellcheck source=../cli-cache.sh
+source "${HERE}/../cli-cache.sh"
+dhall_cli_cache_begin
 
-time_dhall pipeline.dhall
-time_dhall get_config.dhall
+dhall_cli_time_cold_warm pipeline "${DHALL}" --file pipeline.dhall
+dhall_cli_time_cold_warm get_config "${DHALL}" --file get_config.dhall

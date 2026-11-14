@@ -3,7 +3,14 @@ env:
 
 # NOTE: Please keep .mergify.yml in sync when adding or removing any jobs.
 name: main
-on: [pull_request]
+# Caches written by pull_request are stored on the merge ref and are invisible
+# to other PRs. push to main writes the default-branch copies that later PRs
+# restore. Which jobs are cached, and how the key is built, is on the Cache step.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 jobs:
   build:
     strategy:
@@ -57,14 +64,30 @@ jobs:
           enable-stack: true
           stack-version: "latest"
           stack-no-global: true
+      # Cache the required builds only: Ubuntu stack.yaml (GHC 9.6), macOS, and Windows.
+      # The other resolvers (stack.ghc-8.10.yaml, 9.2, 9.4, 9.8, 9.10, 9.12) skip
+      # this step. Skipping actions/cache skips both the restore and the post-job
+      # save. Each of those snapshots is about 1.5 GB, and the repository cache
+      # quota is 10 GB, so saving them was evicting the required entries.
+      #
+      # Key: runner, arch, cache_generation, and a hash of that job's Stack file.
+      # There is no restore-keys prefix. The old prefix matched every Ubuntu
+      # snapshot, so a miss downloaded another GHC and the post step saved that
+      # tree under this job's key. An exact hit still restores the right snapshot.
+      # The path is the Stack root only (the compiler and the snapshot packages).
+      # .stack-work stays in the checkout, so local packages rebuild on every run.
+      # bench.yml uses this same Ubuntu key. dhall-try has its own Nix cache below.
       - name: "Cache"
+        if: matrix.stack-yaml == 'stack.yaml'
         uses: actions/cache@v6
         with:
           key: ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-${{ hashFiles(matrix.stack-yaml) }}
-          restore-keys: |
-            ${{ matrix.os.runner }}-${{ runner.arch }}-${{ env.cache_generation }}-
           path: |
             ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+      # Workaround for Ubuntu 26.04 that no longer has ld.gold but Stack's GHC bindist thinks it's still there (cached from Ubuntu 24.04)
+      - name: "Install gold linker"
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y binutils-gold
       - name: "Install libsodium"
         shell: bash
         run: |
@@ -73,6 +96,10 @@ jobs:
           fi
           echo "::debug::'pkg-config libsodium' output:"
           pkg-config --print-errors --libs libsodium || true
+      # Workaround for macos-26 issue with command line tools, see https://github.com/actions/runner-images/issues/14940 and https://github.com/actions/runner-images/pull/15002
+      - name: "Use Command Line Tools linker"
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
       - name: "Build"
         shell: bash
         run: |
@@ -191,3 +218,58 @@ jobs:
         with:
           name: 'dhall-${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
           path: 'dhall-*${{ runner.os }}-${{ runner.arch }}.${{ matrix.os.file-extension }}'
+
+  # GHC's JavaScript backend, which is not a Stack target. Kept out of the matrix and
+  # out of .mergify.yml so a JS compile failure does not block native packages.
+  # See nix/javascript.nix and release.nix (javascript-dhall-try).
+  dhall-try:
+    name: ubuntu-latest - dhall-try
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: "Install Nix"
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            extra-substituters = https://cache.dhall-lang.org https://dhall.cachix.org
+            extra-trusted-public-keys = cache.dhall-lang.org:I9/H18WHd60olG5GsIjolp7CtepSgJmM2CsO813VTmM= dhall.cachix.org-1:8laGciue2JBwD49ICFtg+cIF8ddDaW7OFBjDb/dHEAo=
+      # dhall-try is a Nix build, so it does not use the Stack cache above.
+      # It stays cached because the JavaScript build is part of the required set.
+      # primary-key changes when nix/pinnedNixpkgs.nix or nix/javascript.nix changes.
+      # An older store can be restored from the nix-js-<os>- prefix. purge-primary-key
+      # is never, so that restore does not delete the current entry.
+      - name: "Cache Nix store"
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-js-${{ runner.os }}-${{ hashFiles('nix/pinnedNixpkgs.nix', 'nix/javascript.nix') }}
+          restore-prefixes-first-match: nix-js-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+          purge: true
+          purge-prefixes: nix-js-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: 0
+          purge-primary-key: never
+      - name: "Build dhall-try"
+        run: |
+          nix-build nix/javascript.nix -A dhall-try -o "$GITHUB_WORKSPACE/result"
+          # Leave this symlink in place. It is a GC root for the cross compiler,
+          # which ./result does not keep. The cache key is not updated after
+          # the first save.
+          nix-build nix/javascript.nix -A cache-roots -o "$GITHUB_WORKSPACE/dhall-try-cache-roots"
+          # result/ is a symlink into /nix/store, which upload-artifact will not follow.
+          cp -L "$GITHUB_WORKSPACE/result/bin/dhall-try.jsexe/all.min.js" "$GITHUB_WORKSPACE/dhall-try.all.min.js"
+      - name: "Upload minified interpreter"
+        uses: actions/upload-artifact@v7
+        with:
+          name: dhall-try-all.min.js
+          path: dhall-try.all.min.js
+          retention-days: 14
+          if-no-files-found: error

@@ -75,6 +75,18 @@ alpha-normalize output
 \f[B]--no-cache\f[R]
 Don\[cq]t use cache to resolve imports
 .TP
+\f[B]--no-remote\f[R]
+Reject http and https imports used as code, as Text, or as Bytes, including integrity-checked cache hits.
+as Location, local files, and env imports are unchanged.
+.RS
+.PP
+This is not the same as compiling with \f[C]-f-with-http\f[R].
+That Cabal flag removes the HTTP client.
+Nixpkgs uses it so a build can still resolve hashed URL imports from a semantic cache that Nix has already filled; a cache miss fails instead of opening a connection.
+\f[C]--no-remote\f[R] leaves the HTTP client linked and rejects those cache hits.
+as Location fetches nothing under either control.
+.RE
+.TP
 \f[B]--explain\f[R]
 Explain error messages in detail
 .TP

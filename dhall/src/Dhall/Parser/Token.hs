@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -11,6 +12,7 @@ module Dhall.Parser.Token (
     lineCommentPrefix,
     blockComment,
     nonemptyWhitespace,
+    requireWhsp1,
     bashEnvironmentVariable,
     posixEnvironmentVariable,
     ComponentType(..),
@@ -20,6 +22,8 @@ module Dhall.Parser.Token (
     label,
     boundLabel,
     anyLabelOrSome,
+    anyLabelOrSomeOrKeywordHint,
+    bareKeyword,
     anyLabel,
     labels,
     httpRaw,
@@ -30,6 +34,8 @@ module Dhall.Parser.Token (
     doubleLiteral,
     doubleInfinity,
     naturalLiteral,
+    nonZeroDecimalNaturalLiteral,
+    zeroPrefixedNaturalLiteral,
     integerLiteral,
     dateFullYear,
     dateMonth,
@@ -107,10 +113,10 @@ module Dhall.Parser.Token (
 import Dhall.Parser.Combinators
 
 import Control.Applicative     (Alternative (..), optional)
-import Data.Bits               ((.&.))
-import Data.Functor            (void, ($>))
+import Data.Bits               (shiftL, (.&.))
+import Data.Functor            (void)
 import Data.Text               (Text)
-import Data.Word               (Word8)
+import Data.Word               (Word64, Word8)
 import Dhall.Syntax
 import Text.Parser.Combinators (choice, try, (<?>))
 
@@ -122,7 +128,6 @@ import qualified Data.List.NonEmpty
 import qualified Data.Scientific            as Scientific
 import qualified Data.Text
 import qualified Text.Megaparsec
-import qualified Text.Megaparsec.Char.Lexer
 import qualified Text.Parser.Char
 import qualified Text.Parser.Combinators
 import qualified Text.Parser.Token
@@ -158,6 +163,15 @@ whitespace = Text.Parser.Combinators.skipMany whitespaceChunk
 -}
 nonemptyWhitespace :: Parser ()
 nonemptyWhitespace = Text.Parser.Combinators.skipSome whitespaceChunk
+
+{-| Parse 1 or more whitespace characters, or fail with a dedicated message.
+
+    This is used after tokens such as @:@ where the standard requires @whsp1@
+    and a missing space is a common mistake.
+-}
+requireWhsp1 :: String -> Parser ()
+requireWhsp1 after =
+    nonemptyWhitespace <|> fail ("Whitespace is required after " <> after)
 
 alpha :: Char -> Bool
 alpha c = ('\x41' <= c && c <= '\x5A') || ('\x61' <= c && c <= '\x7A')
@@ -272,18 +286,106 @@ integerLiteral = (do
     This corresponds to the @natural-literal@ rule from the official grammar
 -}
 naturalLiteral :: Parser Natural
-naturalLiteral = (zeroPrefixed <|> nonZeroDecimal) <?> "literal"
-  where
-    zeroPrefixed = do
-        _ <- char '0'
-        binary <|> hexadecimal <|> nonDigitAfterZero
+naturalLiteral = (zeroPrefixedNaturalLiteral <|> decimalNatural) <?> "literal"
 
-    nonDigitAfterZero = Text.Megaparsec.notFollowedBy (Text.Parser.Char.satisfy digit) $> 0
-    binary = char 'b' >> Text.Megaparsec.Char.Lexer.binary
-    hexadecimal = char 'x' >> Text.Megaparsec.Char.Lexer.hexadecimal
-    nonZeroDecimal = do
-        _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
-        Text.Megaparsec.Char.Lexer.decimal
+{-| Parse @0@, @0b…@, or @0x…@
+
+    Non-zero decimal naturals are parsed separately so they can be tried before
+    double literals without also accepting @1.0@ as @1@.
+-}
+zeroPrefixedNaturalLiteral :: Parser Natural
+zeroPrefixedNaturalLiteral = do
+    _ <- char '0'
+    binary <|> hexadecimal <|> afterZero
+  where
+    afterZero = do
+        extra <- spanWhile digit
+        if Data.Text.null extra
+            then pure 0
+            else fail "Natural literals cannot have leading zeros"
+    binary = do
+        _ <- char 'b'
+        digits <- spanWhile1 isBinDigit
+        return (naturalFromBinaryDigits digits)
+    hexadecimal = do
+        _ <- char 'x'
+        digits <- spanWhile1 hexdig
+        return (naturalFromHexadecimalDigits digits)
+    isBinDigit c = c == '0' || c == '1'
+
+{-| Parse a non-zero decimal natural that is not the start of a double literal
+
+    Rejects only a following fraction or exponent (@1.0@, @1e2@), so @123.foo@
+    still parses as a natural with field access.
+-}
+nonZeroDecimalNaturalLiteral :: Parser Natural
+nonZeroDecimalNaturalLiteral =
+    decimalNatural <* Text.Parser.Combinators.notFollowedBy doubleContinuation
+  where
+    doubleContinuation =
+            void (Text.Parser.Char.char '.' *> Text.Parser.Char.digit)
+        <|> void
+            ( Text.Parser.Char.oneOf "eE"
+                *> optional (signPrefix :: Parser (Integer -> Integer))
+                *> Text.Parser.Char.digit
+            )
+
+decimalNatural :: Parser Natural
+decimalNatural = do
+    _ <- Text.Megaparsec.lookAhead (Text.Parser.Char.satisfy (\c -> '1' <= c && c <= '9'))
+    digits <- spanWhile1 digit
+    return (naturalFromDecimalDigits digits)
+
+-- | Convert a non-empty decimal digit run with divide-and-conquer.
+--
+-- A left fold is quadratic in bignum arithmetic; splitting and combining with
+-- @hi * 10^k + lo@ lets GMP multiply large halves.
+naturalFromDecimalDigits :: Text -> Natural
+naturalFromDecimalDigits = convert
+  where
+    convert chunk
+        | n <= 18 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi * 10 ^ k + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 10 + fromIntegral (Char.digitToInt c)
+
+-- | Convert a non-empty hexadecimal digit run by splitting and bit-shifting.
+naturalFromHexadecimalDigits :: Text -> Natural
+naturalFromHexadecimalDigits = convert
+  where
+    convert chunk
+        | n <= 16 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi `shiftL` (4 * k) + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 16 + fromIntegral (Char.digitToInt c)
+
+-- | Convert a non-empty binary digit run by splitting and bit-shifting.
+naturalFromBinaryDigits :: Text -> Natural
+naturalFromBinaryDigits = convert
+  where
+    convert chunk
+        | n <= 64 =
+            fromIntegral (Data.Text.foldl' snoc (0 :: Word64) chunk)
+        | otherwise =
+            let k = n `div` 2
+                (hi, lo) = Data.Text.splitAt (n - k) chunk
+            in convert hi `shiftL` k + convert lo
+      where
+        n = Data.Text.length chunk
+
+    snoc w c = w * 2 + fromIntegral (Char.digitToInt c)
 
 {-| Parse a 4-digit year
 
@@ -406,13 +508,20 @@ identifier = do
 
 whitespaceChunk :: Parser ()
 whitespaceChunk =
-    choice
-        [ void (Dhall.Parser.Combinators.takeWhile1 predicate)
-        , void (Text.Parser.Char.text "\r\n" <?> "newline")
-        , void lineComment
-        , void blockComment
-        ] <?> "whitespace"
+    (do
+        c <- Text.Megaparsec.lookAhead Text.Megaparsec.anySingle
+        case c of
+            ' '  -> spaces
+            '\t' -> spaces
+            '\n' -> spaces
+            '\r' -> void (Text.Parser.Char.text "\r\n" <?> "newline")
+            '-'  -> void lineComment
+            '{'  -> void blockComment
+            _    -> empty
+    ) <?> "whitespace"
   where
+    spaces = void (Dhall.Parser.Combinators.takeWhile1 predicate)
+
     predicate c = c == ' ' || c == '\t' || c == '\n'
 
 -- | Parse a hexademical number and convert to the corresponding `Int`
@@ -454,42 +563,42 @@ lineCommentPrefix = do
 lineComment :: Parser Text
 lineComment = try (lineCommentPrefix <* endOfLine)
 
--- | Parsed text doesn't include opening braces
+-- | Parse a block comment, including the opening @{-@ and closing @-}@.
+--
+-- @dhall-docs@ inspects the returned text for @{-|@ markers.  The
+-- concatenation is lazy so the whitespace parser, which @void@s this
+-- result, does not copy the body.
 blockComment :: Parser Text
 blockComment = do
     _ <- text "{-"
-    c <- blockCommentContinue
-    pure ("{-" <> c <> "-}")
+    input <- Text.Megaparsec.getInput
+    case takeBlockComment input of
+        Nothing -> fail "unterminated block comment"
+        Just n  -> do
+            let chunk = Data.Text.take n input
+            skipChunk chunk
+            return ("{-" <> chunk)
 
-blockCommentChunk :: Parser Text
-blockCommentChunk =
-    choice
-        [ blockComment  -- Nested block comment
-        , characters
-        , character
-        , endOfLine
-        ]
+-- Nested block comments are scanned as a length, then dropped in one slice,
+-- so the body is never concatenated.
+takeBlockComment :: Text -> Maybe Int
+takeBlockComment = go 0 1
   where
-    characters = (Dhall.Parser.Combinators.takeWhile1 predicate)
-      where
-        predicate c =
-                '\x20' <= c && c <= '\x10FFFF' && c /= '-' && c /= '{'
-            ||  c == '\n'
-            ||  c == '\t'
-
-    character = (Dhall.Parser.Combinators.satisfy predicate)
-      where
-        predicate c = '\x20' <= c && c <= '\x10FFFF' || c == '\n' || c == '\t'
-
-blockCommentContinue :: Parser Text
-blockCommentContinue = endOfComment <|> continue
-  where
-    endOfComment = void (text "-}") *> pure ""
-
-    continue = do
-        c <- blockCommentChunk
-        c' <- blockCommentContinue
-        pure (c <> c')
+    go :: Int -> Int -> Text -> Maybe Int
+    go !n !d t
+        | d == 0               = Just n
+        | Data.Text.null t     = Nothing
+        | Data.Text.isPrefixOf "{-" t =
+            go (n + 2) (d + 1) (Data.Text.drop 2 t)
+        | Data.Text.isPrefixOf "-}" t =
+            go (n + 2) (d - 1) (Data.Text.drop 2 t)
+        | otherwise            =
+            -- Skip a delimiter-free run in one slice. Walking char-by-char
+            -- with Text.drop 1 allocates a header per character.
+            let (run, rest) = Data.Text.break (\c -> c == '-' || c == '{') t
+            in  if Data.Text.null run
+                    then go (n + 1) d (Data.Text.drop 1 t)
+                    else go (n + Data.Text.length run) d rest
 
 simpleLabel :: Bool -> Parser Text
 simpleLabel allowReserved = try $ do
@@ -530,19 +639,25 @@ labels = do
 
     whitespace
 
+    _ <- optional (_comma *> whitespace)
+
     nonEmptyLabels <|> emptyLabels
   where
     emptyLabels = do
-        try (optional (_comma *> whitespace) *> _closeBrace)
+        _closeBrace
 
         pure []
 
     nonEmptyLabels = do
-        x  <- try (optional (_comma *> whitespace) *> anyLabelOrSome)
+        x <- anyLabelOrSomeOrKeywordHint
 
         whitespace
 
-        xs <- many (try (_comma *> whitespace *> anyLabelOrSome) <* whitespace)
+        xs <- many $ do
+            try (_comma *> whitespace <* Text.Megaparsec.notFollowedBy _closeBrace)
+            l <- anyLabelOrSomeOrKeywordHint
+            whitespace
+            return l
 
         _ <- optional (_comma *> whitespace)
 
@@ -587,6 +702,30 @@ anyLabel = (do
 
 anyLabelOrSome :: Parser Text
 anyLabelOrSome = try anyLabel <|> ("Some" <$ _Some)
+
+-- | A reserved keyword parsed as a simple label (not backtick-quoted).
+bareKeyword :: Parser Text
+bareKeyword = try $ do
+    c    <- Text.Parser.Char.satisfy headCharacter
+    rest <- Dhall.Parser.Combinators.takeWhile tailCharacter
+    let t = Data.Text.cons c rest
+    Monad.guard (t `Data.HashSet.member` reservedKeywords)
+    return t
+
+-- | Like `anyLabelOrSome`, but if the next token is a bare keyword then fail
+-- with a hint to quote it (e.g. @{ assert = 1 }@ → @`assert`@).
+anyLabelOrSomeOrKeywordHint :: Parser Text
+anyLabelOrSomeOrKeywordHint = anyLabelOrSome <|> failBareKeywordAsLabel
+  where
+    failBareKeywordAsLabel = do
+        name <- bareKeyword
+        fail
+            (  "Keyword "
+            <> Data.Text.unpack name
+            <> " cannot be used as a label; quote it as `"
+            <> Data.Text.unpack name
+            <> "`"
+            )
 
 {-| Parse a valid Bash environment variable name
 

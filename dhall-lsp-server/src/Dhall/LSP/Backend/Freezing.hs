@@ -5,9 +5,11 @@ module Dhall.LSP.Backend.Freezing (
   stripHash
 ) where
 
-import Control.Lens                  (universeOf)
+import Control.Lens                  (universeOf, view)
 import Data.Text                     (Text)
+import Data.Void                     (Void)
 import Dhall                         (EvaluateSettings)
+import Dhall.Import                  (RemoteImportMode)
 import Dhall.Core
     ( Expr (..)
     , Import (..)
@@ -18,11 +20,21 @@ import Dhall.LSP.Backend.Dhall
     ( Cache
     , DhallError
     , FileIdentifier
+    , asWellTyped
+    , cachedSemantics
+    , emptyCache
     , hashNormalToCode
+    , identifierChained
     , load
+    , lookupCachedImport
     , normalize
-    , typecheck
+    , sharedStatus
     )
+
+import qualified Dhall
+import qualified Dhall.Core   as Core
+import qualified Dhall.Import as Import
+import qualified Dhall.Map    as Map
 import Dhall.LSP.Backend.Diagnostics
     ( Range (..)
     , positionFromMegaparsec
@@ -31,6 +43,7 @@ import Dhall.LSP.Backend.Diagnostics
     , subtractPosition
     )
 import Dhall.LSP.Backend.Parsing     (getImportHash)
+import Dhall.LSP.Backend.Prefix      (singleCodeImport)
 import Dhall.Parser                  (Src (..))
 
 
@@ -40,18 +53,69 @@ import qualified Data.Text as Text
 -- 'semantic' hash in the textual representation used to freeze Dhall imports.
 computeSemanticHash
     :: EvaluateSettings
+    -> RemoteImportMode
     -> FileIdentifier
     -> Expr Src Import
     -> Cache
     -> IO (Either DhallError (Cache, Text))
-computeSemanticHash settings fileid expr cache = do
-  loaded <- load settings fileid expr cache
-  case loaded of
-    Left err -> return (Left err)
-    Right (cache', expr') -> case typecheck settings expr' of
-      Left err -> return (Left err)
-      Right (wt,_) ->
-        return (Right (cache', hashNormalToCode (normalize settings wt)))
+computeSemanticHash settings remoteImportMode fileid expr cache = do
+    cachedHash <- hashCachedSingleImport settings fileid cache expr
+    case cachedHash of
+        Just hash ->
+            return (Right (cache, hash))
+        Nothing -> do
+            loaded <- load settings remoteImportMode fileid expr cache
+            case loaded of
+                Left err ->
+                    return (Left err)
+                Right (cache', expr') ->
+                    return
+                        (Right
+                            ( cache'
+                            , hashNormalToCode (normalize settings cache' (asWellTyped expr'))
+                            ))
+
+-- | When the file is only a code import, reuse cached import semantics.
+hashCachedSingleImport
+    :: EvaluateSettings
+    -> FileIdentifier
+    -> Cache
+    -> Expr Src Import
+    -> IO (Maybe Text)
+hashCachedSingleImport settings fileid cache expr =
+    case singleCodeImport expr of
+        Nothing ->
+            return Nothing
+        Just imp ->
+            case lookupCachedImport fileid cache imp of
+                Nothing ->
+                    return Nothing
+                Just (_, sem) ->
+                    case sharedStatus cache of
+                        Nothing ->
+                            return (Just (hashVoidSemantics settings sem))
+                        Just status ->
+                            hashShared status imp sem
+  where
+    hashShared status imp sem =
+        let chained =
+                Import.Chained
+                    (Import.chainedImport (identifierChained fileid) <> imp)
+        in case Map.lookup chained (cachedSemantics cache) of
+            Nothing ->
+                return (Just (hashVoidSemantics settings sem))
+            Just semantics -> do
+                normal <-
+                    Import.alphaBetaNormalForIntegrityHash
+                        status
+                        (view Dhall.normalizer settings)
+                        imp
+                        semantics
+                return (Just (Import.hashExpressionToCode normal))
+
+hashVoidSemantics :: EvaluateSettings -> Expr Void Void -> Text
+hashVoidSemantics settings sem =
+    hashNormalToCode (normalize settings emptyCache (asWellTyped (Core.renote sem)))
 
 stripHash :: Import -> Import
 stripHash (Import (ImportHashed _ importType) mode) =

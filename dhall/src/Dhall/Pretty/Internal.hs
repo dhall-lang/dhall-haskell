@@ -269,7 +269,18 @@ renderComment text =
         then mempty
         else " "
 
-    oldLines = Text.splitOn "\n" text
+    -- Drop `\r` rather than turning it into a newline.  `\r\n` is an end-of-line
+    -- so the `\n` remains; a bare `\r` is not valid comment text (line comments
+    -- stop before `\r`), and treating it as a line break splits the comment so
+    -- the following characters parse as code.
+    --
+    -- Also strip trailing spaces/tabs: `layout` runs `removeTrailingWhitespace`
+    -- *after* measuring width, so those characters would otherwise inflate
+    -- column counts and a later format pass could pick a different `group`
+    -- layout.
+    oldLines =
+        map (Text.dropWhileEnd horizontalSpace)
+            (Text.splitOn "\n" (Text.filter (/= '\r') text))
 
     spacePrefix = Text.takeWhile horizontalSpace
 

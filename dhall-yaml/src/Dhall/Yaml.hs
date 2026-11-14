@@ -44,7 +44,7 @@ dhallToYaml Options{..} mFilePath code = do
 
   let adapt (header, value) = (header, omission value)
 
-  (Header comment, json) <- adapt <$> explaining (codeToHeaderAndValue conversion UseYAMLEncoding mFilePath code)
+  (Header comment, json) <- adapt <$> explaining (codeToHeaderAndValue conversion UseYAMLEncoding remoteImportMode mFilePath code)
 
   let suffix
           | preserveHeader = Data.Text.Encoding.encodeUtf8 comment

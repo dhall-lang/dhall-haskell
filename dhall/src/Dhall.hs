@@ -34,6 +34,7 @@ module Dhall
     , substitutions
     , normalizer
     , newManager
+    , remoteImportMode
     , reportWarning
     , defaultInputSettings
     , InputSettings
@@ -52,6 +53,8 @@ module Dhall
     , parseWithSettings
     , resolveWithSettings
     , resolveAndStatusWithSettings
+    , resolveSharedWithSettings
+    , resolveAndTypecheckWithSettings
     , emptyStatusWithSettings
     , typecheckWithSettings
     , checkWithSettings
@@ -65,14 +68,16 @@ module Dhall
 import Control.Applicative    (Alternative, empty)
 import Control.Monad.Catch    (MonadThrow, throwM)
 import Data.Either.Validation (Validation (..))
+import Data.Maybe             (isNothing)
 import Data.Void              (Void, absurd)
-import Dhall.Import           (Imported (..), Status)
+import Dhall.Import           (ImportRef, Imported (..), Status)
 import Dhall.Parser           (Src (..))
 import Dhall.Syntax           (Expr (..), Import)
 import Dhall.TypeCheck        (DetailedTypeError (..), TypeError)
 import GHC.Generics
 import Lens.Micro             (Lens', lens)
 import Lens.Micro.Extras      (view)
+import Prettyprinter          (Pretty)
 import Prelude                hiding (maybe, sequence)
 import System.FilePath        (takeDirectory)
 
@@ -128,11 +133,12 @@ sourceName = lens _sourceName (\s x -> s { _sourceName = x})
 
 -- | @since 1.16
 data EvaluateSettings = EvaluateSettings
-  { _substitutions   :: Dhall.Substitution.Substitutions Src Void
-  , _startingContext :: Dhall.Context.Context (Expr Src Void)
-  , _normalizer      :: Maybe (Core.ReifiedNormalizer Void)
-  , _newManager      :: IO Dhall.Import.Manager
-  , _reportWarning   :: Text -> IO ()
+  { _substitutions     :: Dhall.Substitution.Substitutions Src Void
+  , _startingContext   :: Dhall.Context.Context (Expr Src Void)
+  , _normalizer        :: Maybe (Core.ReifiedNormalizer Void)
+  , _newManager        :: IO Dhall.Import.Manager
+  , _remoteImportMode  :: Dhall.Import.RemoteImportMode
+  , _reportWarning     :: Text -> IO ()
   }
 
 -- | Default evaluation settings: no extra entries in the initial
@@ -141,11 +147,12 @@ data EvaluateSettings = EvaluateSettings
 -- @since 1.16
 defaultEvaluateSettings :: EvaluateSettings
 defaultEvaluateSettings = EvaluateSettings
-  { _substitutions   = Dhall.Substitution.empty
-  , _startingContext = Dhall.Context.empty
-  , _normalizer      = Nothing
-  , _newManager      = Dhall.Import.defaultNewManager
-  , _reportWarning   = Dhall.Util.printWarning
+  { _substitutions    = Dhall.Substitution.empty
+  , _startingContext  = Dhall.Context.empty
+  , _normalizer       = Nothing
+  , _newManager       = Dhall.Import.defaultNewManager
+  , _remoteImportMode = Dhall.Import.AllowRemoteImports
+  , _reportWarning    = Dhall.Util.printWarning
   }
 
 -- | Access the starting context used for evaluation and type-checking.
@@ -187,6 +194,16 @@ newManager
 newManager =
     evaluateSettings
         . lens _newManager (\s x -> s { _newManager = x })
+
+-- | Whether URL imports that fetch are rejected.  See
+--   'Dhall.Import.RemoteImportMode'.  The default is
+--   'Dhall.Import.AllowRemoteImports'.
+remoteImportMode
+  :: (HasEvaluateSettings s)
+  => Lens' s Dhall.Import.RemoteImportMode
+remoteImportMode =
+    evaluateSettings
+        . lens _remoteImportMode (\s x -> s { _remoteImportMode = x })
 
 -- | Access the warning reporting action.
 reportWarning
@@ -255,6 +272,54 @@ expectWithSettings settings Decoder{..} expression = do
 
     checkWithSettings settings expected' expression
 
+-- | 'Dhall.Import.typecheckLoaded' for a resolved expression, throwing the
+--   type error.  The parsed expression still has its imports, so each child
+--   is checked from the type stored while it was loaded.
+typecheckLoadedSettings
+    :: Expr Src Import
+    -> Expr Src Void
+    -> Status
+    -> IO ()
+typecheckLoadedSettings parsed resolved status = do
+    result <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded parsed resolved)
+            status
+    either throwM (return . const ()) result
+
+-- | Check a resolved expression against a decoder using 'typecheckLoaded'.
+--
+--   The fallback still type-checks the inlined annotation, so a reported
+--   error points at that tree.
+expectLoaded
+    :: Decoder a
+    -> Expr Src Import
+    -> Expr Src Void
+    -> Status
+    -> IO ()
+expectLoaded Decoder{..} parsed resolved status = do
+    expected' <- case expected of
+        Success x -> return x
+        Failure e -> throwM e
+
+    typecheckLoadedSettings
+        (annotateWithType parsed (fmap absurd expected'))
+        (annotateWithType resolved expected')
+        status
+
+-- | Same annotation 'checkWithSettings' builds, so the source span covers
+--   the expected type.
+annotateWithType :: Pretty a => Expr Src a -> Expr Src a -> Expr Src a
+annotateWithType expression type_ =
+    case expression of
+        Note (Src begin end bytes) _ ->
+            Note (Src begin end bytes') (Annot expression type_)
+          where
+            suffix = Dhall.Pretty.Internal.prettyToStrictText type_
+            bytes' = bytes <> " : " <> suffix
+        _ ->
+            Annot expression type_
+
 {-| Resolve an expression, using the supplied `InputSettings`
 
     Note that this also applies any substitutions specified in the
@@ -265,8 +330,9 @@ expectWithSettings settings Decoder{..} expression = do
     'normalizeWithSettings' when a normal form is required.
 -}
 resolveWithSettings :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
-resolveWithSettings settings expression =
-    fst <$> resolveAndStatusWithSettings settings expression
+resolveWithSettings settings expression = do
+    (resolved, _, _) <- resolveKeeping settings False False expression
+    pure resolved
 
 -- | A version of 'resolveWithSettings' that also returns the import 'Status'
 -- together with the resolved expression.
@@ -280,18 +346,96 @@ resolveAndStatusWithSettings
     -> Expr Src Import
     -> IO (Expr Src Void, Status)
 resolveAndStatusWithSettings settings expression = do
+    (resolved, _, status) <- resolveSharedWithSettings settings expression
+    pure (resolved, status)
+
+-- | As 'resolveAndStatusWithSettings', plus the twin expression that
+--   'Dhall.Import.normalizeLoaded' evaluates.
+--
+--   The first expression is the fully inlined tree.  The second refers to each
+--   import by an 'ImportRef', and every use of an import is the same reference.
+resolveSharedWithSettings
+    :: InputSettings
+    -> Expr Src Import
+    -> IO (Expr Src Void, Expr Src ImportRef, Status)
+resolveSharedWithSettings settings expression =
+    resolveKeeping settings True True expression
+
+-- | Resolve like 'resolveSharedWithSettings', optionally dropping data that
+--   the caller does not return.
+--
+--   Bodies stay when the caller evaluates the shared expression through
+--   'Dhall.Import.normalizeLoaded', and whenever the 'Status' is returned.
+--   Sources stay for every status-returning API.  Callers that return neither
+--   'Status' nor a shared expression may drop both.  The import graph is
+--   always recorded; omitting it is a separate change.
+resolveKeeping
+    :: InputSettings
+    -> Bool
+    -> Bool
+    -> Expr Src Import
+    -> IO (Expr Src Void, Expr Src ImportRef, Status)
+resolveKeeping settings retainBodies retainSources expression = do
     let InputSettings{..} = settings
 
-    let status = emptyStatusWithSettings _evaluateSettings _rootDirectory
+    let status =
+            (emptyStatusWithSettings _evaluateSettings _rootDirectory)
+                { Dhall.Import._keepImportBodies = retainBodies
+                , Dhall.Import._keepImportSources = retainSources
+                }
 
     let expression' =
             Dhall.Substitution.substitute
                 expression
                 (fmap (fmap absurd) (view substitutions settings))
 
-    (resolved, status') <- State.runStateT (Dhall.Import.loadWith expression') status
+    ((resolved, shared), status') <-
+        State.runStateT (Dhall.Import.loadWithShared expression') status
 
-    pure (resolved, status')
+    pure (resolved, shared, status')
+
+-- | Resolve imports and type-check the result.
+--
+--   Every imported file is already type-checked while its imports are
+--   resolved, so those results are reused instead of type-checking the inlined
+--   tree again.  If an import is not cached (for example the unused side of
+--   @?@), the inlined tree is checked as before.
+--
+--   Returns the inlined expression and its type.
+resolveAndTypecheckWithSettings
+    :: InputSettings
+    -> Expr Src Import
+    -> IO (Expr Src Void, Either (TypeError Src Void) (Expr Src Void))
+resolveAndTypecheckWithSettings settings expression = do
+    (resolved, _, status) <- resolveKeeping settings False False expression
+
+    typed <-
+        State.evalStateT
+            (Dhall.Import.typecheckLoaded expression resolved)
+            status
+
+    pure (resolved, typed)
+
+-- | A custom normalizer evaluates the inlined tree, so the shared bodies are
+--   unused.  Every other caller of 'normalizeResolved' needs them.
+retainSharedBodies :: InputSettings -> Bool
+retainSharedBodies settings =
+    isNothing (view normalizer settings)
+
+-- | Normalize after resolution.  A custom normalizer sees the inlined tree.
+--   Otherwise each import is evaluated once through the shared twin.
+normalizeResolved
+    :: InputSettings
+    -> Status
+    -> Expr Src ImportRef
+    -> Expr Src Void
+    -> Expr t Void
+normalizeResolved settings status shared resolved =
+    case view normalizer settings of
+        Nothing ->
+            Dhall.Import.normalizeLoaded status shared
+        Just _ ->
+            Core.normalizeWith (view normalizer settings) resolved
 
 -- | As 'emptyStatus' but applying 'EvaluateSettings'.
 emptyStatusWithSettings :: EvaluateSettings -> FilePath -> Status
@@ -299,10 +443,11 @@ emptyStatusWithSettings EvaluateSettings{..} rootDir =
         transform (Dhall.Import.emptyStatusWithManager _newManager rootDir)
     where
         transform =
-               Lens.set Dhall.Import.substitutions   _substitutions
-            .  Lens.set Dhall.Import.normalizer      _normalizer
-            .  Lens.set Dhall.Import.startingContext _startingContext
-            .  Lens.set Dhall.Import.reportWarning   _reportWarning
+               Lens.set Dhall.Import.substitutions    _substitutions
+            .  Lens.set Dhall.Import.normalizer       _normalizer
+            .  Lens.set Dhall.Import.startingContext  _startingContext
+            .  Lens.set Dhall.Import.remoteImportMode _remoteImportMode
+            .  Lens.set Dhall.Import.reportWarning    _reportWarning
 
 -- | Normalize an expression, using the supplied `InputSettings`
 normalizeWithSettings :: InputSettings -> Expr Src Void -> Expr Src Void
@@ -353,11 +498,11 @@ inputWithSettings
 inputWithSettings settings decoder@Decoder{..} text = do
     parsed <- parseWithSettings settings text
 
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    expectWithSettings settings decoder resolved
+    expectLoaded decoder parsed resolved status
 
-    let normalized = normalizeWithSettings settings resolved
+    let normalized = normalizeResolved settings status shared resolved
 
     case extract normalized of
         Success x -> return x
@@ -430,11 +575,11 @@ inputExprWithSettings
 inputExprWithSettings settings text = do
     parsed <- parseWithSettings settings text
 
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    _ <- typecheckWithSettings settings resolved
+    typecheckLoadedSettings parsed resolved status
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    pure (normalizeResolved settings status shared resolved)
 
 {-| Interpret a Dhall Expression
 
@@ -447,11 +592,11 @@ interpretExpr = interpretExprWithSettings defaultInputSettings
 interpretExprWithSettings
     :: InputSettings -> Expr Src Import -> IO (Expr Src Void)
 interpretExprWithSettings settings parsed = do
-    resolved <- resolveWithSettings settings parsed
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False parsed
 
-    typecheckWithSettings settings resolved
+    typecheckLoadedSettings parsed resolved status
 
-    pure (Core.normalizeWith (view normalizer settings) resolved)
+    pure (normalizeResolved settings status shared resolved)
 
 {- | Decode a Dhall expression
 
@@ -463,11 +608,11 @@ fromExpr = fromExprWithSettings defaultInputSettings
 -- | Like `fromExpr`, but customizable using `InputSettings`
 fromExprWithSettings :: InputSettings -> Decoder a -> Expr Src Import -> IO a
 fromExprWithSettings settings decoder@Decoder{..} expression = do
-    resolved <- resolveWithSettings settings expression
+    (resolved, shared, status) <- resolveKeeping settings (retainSharedBodies settings) False expression
 
-    expectWithSettings settings decoder resolved
+    expectLoaded decoder expression resolved status
 
-    let normalized = Core.normalizeWith (view normalizer settings) resolved
+    let normalized = normalizeResolved settings status shared resolved
 
     case extract normalized of
         Success x -> return x

@@ -7,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Dhall.Main
     ( -- * Options
@@ -22,23 +23,40 @@ module Dhall.Main
     ) where
 
 import Control.Applicative (optional, (<|>))
-import Control.Exception   (Handler (..), SomeException)
+import Control.DeepSeq     (force)
+import Control.Exception   (Handler (..), SomeException, fromException, toException)
 import Control.Monad       (when)
+import Data.Char           (isPrint)
 import Data.Foldable       (for_)
+import Data.Int            (Int64)
 import Data.List.NonEmpty  (NonEmpty (..), nonEmpty)
 import Data.Maybe          (fromMaybe)
 import Data.Monoid         (Endo (..))
 import Data.Text           (Text)
 import Data.Void           (Void)
+import Dhall.Bounded
+    ( Bound (..)
+    , WorkLimit (..)
+    , prettyBounded
+    , runLimited
+    , withAllocationLimit
+    )
 import Dhall.Freeze        (Intent (..), Scope (..))
 import Dhall.Import
     ( Depends (..)
     , Imported (..)
+    , MissingImports (..)
+    , RemoteImportMode (..)
     , SemanticCacheMode (..)
+    , _remoteImportMode
     , _semanticCacheMode
+    , _importErrorMode
+    , _collectedImportErrors
+    , CollectedImportError (..)
+    , ImportErrorMode (..)
     )
+import Dhall.Parser        (Src, SourcedException (..))
 import Dhall.Package       (PackagingMode (..), writePackage)
-import Dhall.Parser        (Src)
 import Dhall.Pretty
     ( Ann
     , CharacterSet (..)
@@ -49,11 +67,12 @@ import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
 import Lens.Micro          (set)
+import Lens.Micro.Extras   (view)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
+import GHC.Show            (showLitChar)
 import System.Exit         (ExitCode, exitFailure)
 import System.IO           (Handle)
-import Text.Dot            ((.->.))
 
 import Dhall.Core
     ( Expr (Annot)
@@ -108,6 +127,7 @@ import qualified Dhall.Util
 import qualified GHC.IO.Encoding
 import qualified Options.Applicative
 import qualified Prettyprinter                      as Pretty
+import qualified Prettyprinter.Render.String        as Pretty.String
 import qualified Prettyprinter.Render.Terminal      as Pretty
 import qualified Prettyprinter.Render.Text          as Pretty.Text
 import qualified System.AtomicWrite.Writer.LazyText as AtomicWrite.LazyText
@@ -115,8 +135,27 @@ import qualified System.Console.ANSI
 import qualified System.Exit                        as Exit
 import qualified System.FilePath
 import qualified System.IO
-import qualified Text.Dot
 import qualified Text.Pretty.Simple
+
+-- | When @--explain@ is enabled, rewrite nested import failures so embedded
+-- type errors use 'DetailedTypeError'.
+explainNestedImportErrors :: SomeException -> SomeException
+explainNestedImportErrors e =
+    case fromException @MissingImports e of
+        Just (MissingImports es) ->
+            toException (MissingImports (map explainNestedImportErrors es))
+        Nothing ->
+            case fromException @(Imported (TypeError Src Void)) e of
+                Just (Imported ps err) ->
+                    toException (Imported ps (DetailedTypeError err))
+                Nothing ->
+                    case fromException @(SourcedException MissingImports) e of
+                        Just (SourcedException src (MissingImports es)) ->
+                            toException
+                                ( SourcedException src
+                                    (MissingImports (map explainNestedImportErrors es))
+                                )
+                        _ -> e
 
 -- | Top-level program options
 data Options = Options
@@ -125,6 +164,10 @@ data Options = Options
     , plain              :: Bool
     , chosenCharacterSet :: ChooseCharacterSet
     , censor             :: Censor
+    , remoteImportMode   :: RemoteImportMode
+    , maxOutputSize      :: Maybe Int
+    , maxAllocation      :: Maybe Int64
+    , maxEvaluationTime  :: Maybe Int
     }
 
 -- | The subcommands for the @dhall@ executable
@@ -209,6 +252,10 @@ parseOptions =
     <*> switch "plain" "Disable syntax highlighting"
     <*> parseCharacterSet
     <*> parseCensor
+    <*> parseRemoteImportMode
+    <*> parseMaxOutputSize
+    <*> parseMaxAllocation
+    <*> parseMaxEvaluationTime
   where
     switch name description =
         Options.Applicative.switch
@@ -216,10 +263,52 @@ parseOptions =
             <>  Options.Applicative.help description
             )
 
+    parseByteLimit :: Read a => String -> String -> Parser (Maybe a)
+    parseByteLimit name description =
+        optional
+            ( Options.Applicative.option
+                Options.Applicative.auto
+                (   Options.Applicative.long name
+                <>  Options.Applicative.metavar "BYTES"
+                <>  Options.Applicative.help description
+                )
+            )
+
+    parseMaxOutputSize =
+        parseByteLimit
+            "max-output-size"
+            "Truncate rendered normal forms and types after this many bytes"
+
+    parseMaxAllocation =
+        parseByteLimit
+            "max-allocation"
+            "Stop evaluation after it allocates this many bytes (also applies to dhall type and dhall repl)"
+
+    parseMaxEvaluationTime =
+        optional
+            ( Options.Applicative.option
+                Options.Applicative.auto
+                (   Options.Applicative.long "max-evaluation-time"
+                <>  Options.Applicative.metavar "SECONDS"
+                <>  Options.Applicative.help
+                        "Stop type-checking, normalization, and rendering after this many seconds (also applies to dhall type and dhall repl)"
+                )
+            )
+
     parseCensor = fmap f (switch "censor" "Hide source code in error messages")
       where
         f True  = Censor
         f False = NoCensor
+
+    parseRemoteImportMode =
+        fmap
+            (\noRemote ->
+                if noRemote then RejectRemoteImports else AllowRemoteImports
+            )
+            (switch
+                "no-remote"
+                "Reject http and https imports (code, as Text, and as Bytes), including integrity-checked cache hits. as Location, local files, and env imports are unchanged"
+            )
 
     parseCharacterSet =
             Options.Applicative.flag'
@@ -630,6 +719,16 @@ noHeaders
 noHeaders i =
     i
 
+-- | Convert a second count from the CLI into microseconds for 'threadDelay'.
+secondsToMicros :: Int -> Int
+secondsToMicros seconds
+    | seconds <= 0 = 0
+    | otherwise =
+        let micros = toInteger seconds * 1000000
+        in if micros > toInteger (maxBound :: Int)
+            then maxBound
+            else fromInteger micros
+
 -- | Run the command specified by the `Options` type
 command :: Options -> IO ()
 command (Options {..}) = do
@@ -640,6 +739,43 @@ command (Options {..}) = do
             StandardInput -> "."
 
     let toStatus = Dhall.Import.emptyStatus . rootDirectory
+
+    let dieOnImportErrors errs = case errs of
+            [] -> return ()
+            _ -> do
+                for_ errs $ \CollectedImportError { collectedErrors, collectedSrc } -> do
+                    for_ collectedErrors $ \e -> do
+                        let shown =
+                                if explain
+                                    then explainNestedImportErrors e
+                                    else e
+                        System.IO.hPutStrLn System.IO.stderr (show shown)
+                    -- Same span 'SourcedException' prints.  Collecting the
+                    -- inner errors dropped it, so the parent file and the
+                    -- import text would otherwise be missing.
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    System.IO.hPutStrLn
+                        System.IO.stderr
+                        ( Pretty.String.renderString
+                            (Dhall.Pretty.layout (Pretty.pretty collectedSrc))
+                        )
+                when (not explain) $
+                    System.IO.hPutStrLn
+                        System.IO.stderr
+                        "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                exitFailure
+
+    let resolve file cacheMode expression = do
+            ((resolved, shared), status) <-
+                State.runStateT
+                    (Dhall.Import.loadWithShared expression)
+                    (toStatus file)
+                        { _semanticCacheMode = cacheMode
+                        , _importErrorMode = CollectErrors
+                        , _remoteImportMode = remoteImportMode
+                        }
+            dieOnImportErrors (reverse (_collectedImportErrors status))
+            return (resolved, shared, status)
 
     let getExpression = Dhall.Util.getExpression censor
 
@@ -657,6 +793,8 @@ command (Options {..}) = do
             Control.Exception.catches io
                 [ Handler handleTypeError
                 , Handler handleImported
+                , Handler handleSourcedMissingImports
+                , Handler handleMissingImports
                 , Handler handleExitCode
                 , Handler handleAll
                 ]
@@ -689,6 +827,28 @@ command (Options {..}) = do
                     else do
                         Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
                         Control.Exception.throwIO (Imported ps e)
+
+            handleMissingImports e@(MissingImports _) =
+                Control.Exception.handle handleAll $ do
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    if explain
+                        then
+                            Control.Exception.throwIO
+                                (explainNestedImportErrors (toException e))
+                        else do
+                            Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                            Control.Exception.throwIO e
+
+            handleSourcedMissingImports (SourcedException src e@(MissingImports _)) =
+                Control.Exception.handle handleAll $ do
+                    System.IO.hPutStrLn System.IO.stderr ""
+                    if explain
+                        then
+                            Control.Exception.throwIO
+                                (explainNestedImportErrors (toException (SourcedException src e)))
+                        else do
+                            Data.Text.IO.hPutStrLn System.IO.stderr "\ESC[2mUse \"dhall --explain\" for detailed errors\ESC[0m"
+                            Control.Exception.throwIO (SourcedException src e)
 
             handleExitCode e =
                 Control.Exception.throwIO (e :: ExitCode)
@@ -731,43 +891,135 @@ command (Options {..}) = do
 
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, sharedExpression, status) <-
+                resolve file semanticCacheMode expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            let reportAllocation = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-allocation"
+                    Exit.exitFailure
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+                reportTime = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-evaluation-time"
+                    Exit.exitFailure
 
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
+                -- Type-checking, alpha-normalization, and rendering sit outside
+                -- 'normalizeLimited'.  A time limit has to cover them: on a
+                -- large normal form they are the slow part, and normalization
+                -- itself can finish inside the budget.
+                produce inferredType evaluated quoteCut = do
+                    normalizedExpression <-
+                        case maxOutputSize of
+                            Nothing ->
+                                return evaluated
+                            Just nbytes -> do
+                                let doc =
+                                        Dhall.Pretty.prettyCharacterSet
+                                            characterSet
+                                            evaluated
+                                case prettyBounded nbytes doc of
+                                    Truncated text -> do
+                                        Data.Text.IO.hPutStrLn System.IO.stdout text
+                                        System.IO.hPutStrLn System.IO.stderr
+                                            "Error: normal form exceeded --max-output-size"
+                                        Exit.exitFailure
+                                    Complete text
+                                        | quoteCut -> do
+                                            Data.Text.IO.hPutStrLn System.IO.stdout text
+                                            System.IO.hPutStrLn System.IO.stderr
+                                                "Error: normal form exceeded --max-output-size"
+                                            Exit.exitFailure
+                                        | otherwise ->
+                                            return evaluated
 
-            let annotatedExpression =
-                    if annotate
-                        then Annot alphaNormalizedExpression inferredType
-                        else alphaNormalizedExpression
+                    let alphaNormalizedExpression =
+                            if alpha
+                            then Dhall.Core.alphaNormalize normalizedExpression
+                            else normalizedExpression
 
-            case output of
-                StandardOutput -> render System.IO.stdout characterSet annotatedExpression
+                    let annotatedExpression =
+                            if annotate
+                            then Annot alphaNormalizedExpression inferredType
+                            else alphaNormalizedExpression
 
-                OutputFile file_ ->
-                    writeDocToFile
-                        file_
-                        (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
+                    case output of
+                        StandardOutput ->
+                            render System.IO.stdout characterSet annotatedExpression
+                        OutputFile file_ ->
+                            writeDocToFile
+                                file_
+                                (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
+
+            let evalShared = do
+                    let (normalForm, quoteCut) =
+                            Dhall.Import.normalizeLoadedCapped
+                                maxOutputSize
+                                status
+                                sharedExpression
+                    forced <- Control.Exception.evaluate (force normalForm)
+                    return (forced, quoteCut)
+
+            case maxEvaluationTime of
+                Nothing -> do
+                    inferredType <-
+                        Dhall.Core.throws
+                            =<< State.evalStateT
+                                (Dhall.Import.typecheckLoaded
+                                    expression
+                                    resolvedExpression
+                                )
+                                status
+                    outcome <- case (maxAllocation, maxOutputSize) of
+                        (Nothing, Nothing) ->
+                            return
+                                ( Right
+                                    ( Dhall.Import.normalizeLoaded
+                                        status
+                                        sharedExpression
+                                    , False
+                                    )
+                                )
+                        _ ->
+                            runLimited maxAllocation Nothing evalShared
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right (evaluated, quoteCut) ->
+                            produce inferredType evaluated quoteCut
+                Just seconds -> do
+                    outcome <-
+                        runLimited Nothing (Just (secondsToMicros seconds)) $ do
+                            inferredType <-
+                                Dhall.Core.throws
+                                    =<< State.evalStateT
+                                        (Dhall.Import.typecheckLoaded
+                                            expression
+                                            resolvedExpression
+                                        )
+                                        status
+                            (evaluated, quoteCut) <-
+                                withAllocationLimit maxAllocation evalShared
+                            produce inferredType evaluated quoteCut
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right () -> return ()
 
         Resolve { resolveMode = Just Dot, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _graph, _stack }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (Dhall.Import.Types.Status { _graph, _stack, _collectedImportErrors }) <-
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors, _remoteImportMode = remoteImportMode }
+
+            dieOnImportErrors (reverse _collectedImportErrors)
 
             let (rootImport :| _) = _stack
                 imports = rootImport : map parent _graph ++ map child _graph
-                importIds = Data.Map.fromList (zip imports [Text.Dot.userNodeId i | i <- [0..]])
+                importIds = Data.Map.fromList (zip imports [0 ..])
 
             let dotNode (i, nodeId) =
-                    Text.Dot.userNode
+                    dotNodeLine
                         nodeId
                         [ ("label", Data.Text.unpack $ pretty (convert i))
                         , ("shape", "box")
@@ -778,14 +1030,15 @@ command (Options {..}) = do
 
             let dotEdge (Depends parent child) =
                     case (Data.Map.lookup parent importIds, Data.Map.lookup child importIds) of
-                        (Just from, Just to) -> from .->. to
-                        _                    -> pure ()
+                        (Just from, Just to) -> [dotEdgeLine from to]
+                        _                    -> []
 
-            let dot = do Text.Dot.attribute ("rankdir", "LR")
-                         mapM_ dotNode (Data.Map.assocs importIds)
-                         mapM_ dotEdge _graph
+            let statements =
+                    "rankdir=\"LR\";"
+                        :  map dotNode (Data.Map.assocs importIds)
+                        ++ concatMap dotEdge _graph
 
-            putStr . ("strict " <>) . Text.Dot.showDot $ dot
+            putStr ("strict " <> showDotGraph statements)
 
         Resolve { resolveMode = Just ListImmediateDependencies, ..} -> do
             expression <- getExpression file
@@ -795,8 +1048,10 @@ command (Options {..}) = do
         Resolve { resolveMode = Just ListTransitiveDependencies, ..} -> do
             expression <- getExpression file
 
-            (Dhall.Import.Types.Status { _cache }) <-
-                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode }
+            (Dhall.Import.Types.Status { _cache, _collectedImportErrors }) <-
+                State.execStateT (Dhall.Import.loadWith expression) (toStatus file) { _semanticCacheMode = semanticCacheMode, _importErrorMode = CollectErrors, _remoteImportMode = remoteImportMode }
+
+            dieOnImportErrors (reverse _collectedImportErrors)
 
             mapM_ print
                  .   fmap ( Pretty.pretty
@@ -812,8 +1067,8 @@ command (Options {..}) = do
             -- import-free typechecked tree, which may still contain lets.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, _, _) <-
+                resolve file semanticCacheMode expression
 
             render System.IO.stdout characterSet resolvedExpression
 
@@ -850,24 +1105,121 @@ command (Options {..}) = do
             -- normalized import.
             (expression, characterSet) <- getExpressionAndCharacterSet file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) semanticCacheMode expression
+            (resolvedExpression, _, status) <-
+                resolve file semanticCacheMode expression
 
-            inferredType <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            let reportAllocation = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-allocation"
+                    Exit.exitFailure
 
-            if quiet
-                then return ()
-                else render System.IO.stdout characterSet inferredType
+                reportTime = do
+                    System.IO.hPutStrLn System.IO.stderr
+                        "Error: evaluation exceeded --max-evaluation-time"
+                    Exit.exitFailure
+
+                inferType = case maxOutputSize of
+                    Nothing -> do
+                        inferredType <-
+                            Dhall.Core.throws
+                                =<< State.evalStateT
+                                    (Dhall.Import.typecheckLoaded
+                                        expression
+                                        resolvedExpression
+                                    )
+                                    status
+                        return (inferredType, False)
+                    Just nbytes -> do
+                        checked <-
+                            State.evalStateT
+                                (Dhall.Import.typecheckWithAlreadyCheckedImports
+                                    (view Dhall.Import.startingContext status)
+                                    expression
+                                )
+                                status
+                        case checked of
+                            Just (Right inferredType) ->
+                                return (inferredType, False)
+                            _ ->
+                                Dhall.Core.throws
+                                    (Dhall.TypeCheck.typeWithContextBounded
+                                        nbytes
+                                        Dhall.TypeCheck.emptyTypingContext
+                                        resolvedExpression)
+
+                printType (inferredType, quoteCut) = case maxOutputSize of
+                    Nothing ->
+                        render System.IO.stdout characterSet inferredType
+                    Just nbytes -> do
+                        let doc =
+                                Dhall.Pretty.prettyCharacterSet
+                                    characterSet
+                                    inferredType
+                        case prettyBounded nbytes doc of
+                            Truncated text -> do
+                                Data.Text.IO.hPutStrLn System.IO.stdout text
+                                System.IO.hPutStrLn System.IO.stderr
+                                    "Error: type exceeded --max-output-size"
+                                Exit.exitFailure
+                            Complete _
+                                | quoteCut -> do
+                                    render
+                                        System.IO.stdout
+                                        characterSet
+                                        inferredType
+                                    System.IO.hPutStrLn System.IO.stderr
+                                        "Error: type exceeded --max-output-size"
+                                    Exit.exitFailure
+                                | otherwise ->
+                                    render
+                                        System.IO.stdout
+                                        characterSet
+                                        inferredType
+
+                produce = do
+                    inferred <- inferType
+                    if quiet
+                        then return ()
+                        else printType inferred
+
+            case maxEvaluationTime of
+                Nothing ->
+                    case maxAllocation of
+                        Nothing ->
+                            produce
+                        Just _ -> do
+                            outcome <-
+                                runLimited maxAllocation Nothing produce
+                            case outcome of
+                                Left AllocationExceeded -> reportAllocation
+                                Left TimeExceeded -> reportTime
+                                Right () -> return ()
+                Just seconds -> do
+                    outcome <-
+                        runLimited maxAllocation (Just (secondsToMicros seconds)) produce
+                    case outcome of
+                        Left AllocationExceeded -> reportAllocation
+                        Left TimeExceeded -> reportTime
+                        Right () -> return ()
 
         Repl ->
             Dhall.Repl.repl
                 (chooseCharsetOrUseDefault Unicode chosenCharacterSet) -- Default to Unicode if no characterSet specified
                 explain
+                Dhall.Repl.ReplLimits
+                    { replMaxOutputSize = maxOutputSize
+                    , replMaxAllocation = maxAllocation
+                    , replMaxEvaluationTime = maxEvaluationTime
+                    }
+                remoteImportMode
 
         Diff {..} -> do
-            expression1 <- Dhall.inputExpr expr1
+            let diffSettings =
+                    set Dhall.remoteImportMode remoteImportMode Dhall.defaultInputSettings
 
-            expression2 <- Dhall.inputExpr expr2
+            expression1 <- Dhall.inputExprWithSettings diffSettings expr1
+
+            expression2 <- Dhall.inputExprWithSettings diffSettings expr2
 
             let diff = Dhall.Diff.diffNormalized expression1 expression2
 
@@ -891,20 +1243,69 @@ command (Options {..}) = do
 
             let intent = if cache then Cache else Secure
 
-            Dhall.Freeze.freeze outputMode transitivity inputs scope intent chosenCharacterSet censor
+            let freezeSettings =
+                    set Dhall.remoteImportMode remoteImportMode Dhall.defaultEvaluateSettings
+
+            Dhall.Freeze.freezeWithSettings
+                freezeSettings
+                outputMode
+                transitivity
+                inputs
+                scope
+                intent
+                chosenCharacterSet
+                censor
 
         Hash {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, sharedExpression, status) <-
+                resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
-
-            let normalizedExpression =
-                    Dhall.Core.toSharedExpr
-                        (Dhall.Core.alphaNormalizeGraph
-                            (Dhall.Core.normalizeGraph resolvedExpression))
+            normalizedExpression <-
+                case Dhall.Import.singleCodeImport expression of
+                    Just import_ -> do
+                        maybeSemantics <-
+                            Dhall.Import.lookupCachedImportSemantics status import_
+                        case maybeSemantics of
+                            Just importSemantics ->
+                                Dhall.Import.alphaBetaNormalForIntegrityHash
+                                    status
+                                    Nothing
+                                    import_
+                                    importSemantics
+                            Nothing -> do
+                                _ <-
+                                    Dhall.Core.throws
+                                        =<< State.evalStateT
+                                            (Dhall.Import.typecheckLoaded
+                                                expression
+                                                resolvedExpression
+                                            )
+                                            status
+                                return
+                                    ( Dhall.Core.alphaNormalize
+                                        ( Dhall.Import.normalizeLoaded
+                                            status
+                                            sharedExpression
+                                        )
+                                    )
+                    Nothing -> do
+                        _ <-
+                            Dhall.Core.throws
+                                =<< State.evalStateT
+                                    (Dhall.Import.typecheckLoaded
+                                        expression
+                                        resolvedExpression
+                                    )
+                                    status
+                        return
+                            ( Dhall.Core.alphaNormalize
+                                ( Dhall.Import.normalizeLoaded
+                                    status
+                                    sharedExpression
+                                )
+                            )
 
             if cache
                 then Dhall.Import.writeExpressionToSemanticCache normalizedExpression
@@ -1032,12 +1433,20 @@ command (Options {..}) = do
         Text {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, sharedExpression, status) <-
+                resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf (Annot resolvedExpression Dhall.Core.Text))
+            _ <-
+                Dhall.Core.throws
+                    =<< State.evalStateT
+                        (Dhall.Import.typecheckLoaded
+                            (Annot expression (Dhall.Core.Text :: Expr Src Import))
+                            (Annot resolvedExpression Dhall.Core.Text)
+                        )
+                        status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             case normalizedExpression of
                 Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
@@ -1066,12 +1475,17 @@ command (Options {..}) = do
         DirectoryTree {..} -> do
             expression <- getExpression file
 
-            resolvedExpression <-
-                Dhall.Import.loadRelativeTo (rootDirectory file) UseSemanticCache expression
+            (resolvedExpression, sharedExpression, status) <-
+                resolve file UseSemanticCache expression
 
-            _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
+            _ <-
+                Dhall.Core.throws
+                    =<< State.evalStateT
+                        (Dhall.Import.typecheckLoaded expression resolvedExpression)
+                        status
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let normalizedExpression =
+                    Dhall.Import.normalizeLoaded status sharedExpression
 
             DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 
@@ -1107,3 +1521,38 @@ main = do
     options <- Options.Applicative.execParser parserInfoOptions
 
     Dhall.Main.command options
+
+-- Render a Graphviz digraph in the form dotgen's showDot produced:
+--
+-- > digraph G {
+-- > rankdir="LR";
+-- > u0[label="...",shape="box",style="rounded"];
+-- > u0 -> u1;
+-- >
+-- > }
+--
+-- Node ids are the non-negative ids userNodeId printed (u0, u1, ...).
+-- The caller prefixes "strict ".
+showDotGraph :: [String] -> String
+showDotGraph statements = "digraph G {\n" ++ unlines statements ++ "\n}\n"
+
+dotNodeLine :: Int -> [(String, String)] -> String
+dotNodeLine nodeId attrs = "u" ++ show nodeId ++ dotAttrs attrs ++ ";"
+
+dotEdgeLine :: Int -> Int -> String
+dotEdgeLine from to = "u" ++ show from ++ " -> " ++ "u" ++ show to ++ ";"
+
+dotAttrs :: [(String, String)] -> String
+dotAttrs [] = ""
+dotAttrs (attr : rest) =
+    "[" ++ dotAttr attr ++ concatMap (\next -> ',' : dotAttr next) rest ++ "]"
+
+dotAttr :: (String, String) -> String
+dotAttr (name, value) = name ++ "=\"" ++ foldr showsDotChar "" value ++ "\""
+
+showsDotChar :: Char -> ShowS
+showsDotChar '"' = ("\\\"" ++)
+showsDotChar '\\' = ("\\\\" ++)
+showsDotChar c
+    | isPrint c = showChar c
+    | otherwise = showLitChar c

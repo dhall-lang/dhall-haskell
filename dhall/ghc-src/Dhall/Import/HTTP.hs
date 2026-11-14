@@ -172,7 +172,7 @@ newManager :: StateT Status IO Manager
 newManager = do
     Status { _newManager = makeManager } <- State.get
     manager <- liftIO makeManager
-    State.modify (\s -> s { _newManager = pure manager })
+    State.modify' (\s -> s { _newManager = pure manager })
     return manager
 
 data NotCORSCompliant = NotCORSCompliant

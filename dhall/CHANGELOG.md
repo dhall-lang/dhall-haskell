@@ -1,4 +1,4 @@
-1.42.3
+1.42.4
 
 * Allow `Some` as a field selector and union constructor (`e.Some`), matching
   `e.None` / `e.List`. `Some e` is still the Optional special form. `dhall format`
@@ -15,6 +15,58 @@
   cannot be bound, even when quoted, and may be used as record field names.
   They remain `Double` literals.
 
+* `dhall --no-remote` rejects http and https imports used as code, as Text,
+  or as Bytes, including integrity-checked cache hits. as Location, local
+  files, and env imports are unchanged. This is separate from the Cabal flag
+  `-f-with-http`, which removes the HTTP client so Nix can still satisfy
+  hashed URL imports from a pre-filled semantic cache.
+* Drop the direct `mmorph`, `dotgen`, and `microlens-mtl` dependencies.
+  `dhall --dot` still prints the same Graphviz graph. `dhall-nixpkgs`
+  also no longer depends on `mmorph` or `microlens-mtl`.
+* `Dhall.Scope` resolves `let`, lambda, `forall` and record-field names,
+  including `x@n`. `dhall-docs` uses it for jump-to-definition for those items.
+* `dhall --max-output-size BYTES` truncates a rendered normal form and
+  requires a byte count. Quoting spends that budget on the text each syntax
+  node prints, instead of treating one byte as one node, and stops once the
+  estimate is used up. The rendered text is then cut at the same byte count
+  and ends with `…`.
+* `dhall --max-allocation BYTES` stops normalization after it allocates that
+  many bytes. `dhall --max-evaluation-time SECONDS` stops type-checking,
+  normalization, and rendering after that many seconds. Each flag requires
+  its argument. Any combination of the three flags is allowed, and omitting
+  one leaves that limit off. Hitting the allocation or time limit yields no
+  partial normal form. Import resolution is not part of the time limit.
+  `dhall type`, `dhall repl`, and the default `dhall` command all honor these
+  flags (`dhall type` applies them to inference and type rendering).
+* The REPL keeps previous `:let` bindings in a `TypingContext` and type-checks
+  them only once with their values kept. Each new REPL command
+  type-checks and normalizes only the new expression rather than all previous `:let`s.
+* `Status` records the text and location of each import that was actually
+  fetched. `decodeSemanticCache` reads a semantic-cache entry by hash
+  without downloading the original source.
+* The `dhall` executable now reports every failed import and exits
+  unsuccessfully, without printing a result. Each report includes the
+  source span of that import in the parent file. `load` and `loadWith` still
+  stop at the first error unless the caller sets `CollectErrors` on
+  `Status`.
+* An imported file is type-checked with each child import bound to the
+  value and type already checked for that child, instead of inferring the
+  inlined child again. `load` still returns the fully inlined expression,
+  and still stops at the first error unless `CollectErrors` is set.
+* `input`, `inputExpr`, `interpretExpr`, and `fromExpr` evaluate each
+  imported file once, even when several files import it. The default
+  `dhall` command does the same, including when a limit flag is set.
+  `load` and `dhall resolve` still return the fully inlined expression,
+  and do not build the second tree used for that shared evaluation.
+  The shared tree refers to each import by an internal reference, and the
+  evaluator resolves each reference to one thunk.
+  A custom normalizer still evaluates that inlined expression.
+* [Stop depending on `repline`](https://github.com/dhall-lang/dhall-haskell/issues/2643)
+  * `dhall repl` keeps the same prompts, `:` commands, `:paste` mode, and `.history` file. The read loop now lives in the internal `Dhall.Repl.Line` module, on top of `haskeline`, instead of the unmaintained `repline` package.
+  * The direct `haskeline` bound is now `>= 0.8 && < 0.9`, which is the range `repline` already required.
+* Add tests for `dhall repl` commands, `:paste`, quit, and the history file
+* Performance: reduce `==` / `!=` on boolean literals without calling
+  `judgmentallyEqual` when both sides are literals ([#1218](https://github.com/dhall-lang/dhall-haskell/issues/1218))
 * BREAKING CHANGE: `TimeLiteral` now stores hour, minute, and second as
   `Word8`, the fractional digits as `Integer`, and the digit count as `Int`,
   instead of `TimeOfDay` plus a `Word` precision. Dhall `Time` literals keep
@@ -27,17 +79,21 @@
 * Faster disk cache for local imports without integrity checks. Cache keys
   hash this file's syntax plus hashes of its imports, instead of hashing the
   fully resolved tree. Entries go in `dhall-haskell-v2/` so they are not mixed
-  with older `dhall-haskell/` files. Small results store a normal form; large
-  ones store only an "already type-checked" marker. Starting-context and
-  substitution hashes are computed once per import run.
+  with older `dhall-haskell/` files. Entries store the inferred type, or a
+  one-byte "already type-checked" marker when the type is not available.
+  Starting-context and substitution hashes are computed once per import run.
 * Fast-path `shiftSubstitutions` when a binder cannot capture a substitution,
   and cache the resolved substitution map once per import run on `Status`.
+
+1.42.3
+
 * [Fix the typechecking rule for `Optional` + `with`](https://github.com/dhall-lang/dhall-haskell/pull/2650)
 * [Add `*WithIndex` instances for `Map`](https://github.com/dhall-lang/dhall-haskell/pull/2633)
 * [`dhall package`: Add support for automatic sub-packags](https://github.com/dhall-lang/dhall-haskell/pull/2639)
 * [`dhall to-directory-tree`: Add `binary-file` support](https://github.com/dhall-lang/dhall-haskell/pull/2641)
 * [Support GHC 9.12.1](https://github.com/dhall-lang/dhall-haskell/pull/2649)
 * [`dhall to-directory-tree`: create parents of files when using fixpoint representation](https://github.com/dhall-lang/dhall-haskell/pull/2653)
+* [Fix `dhall --explain` for type errors in imported files](https://github.com/dhall-lang/dhall-haskell/issues/1657)
 
 1.42.2
 

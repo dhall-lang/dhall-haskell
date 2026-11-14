@@ -31,10 +31,12 @@ module Dhall.Freeze
 
 import Data.Foldable       (for_)
 import Data.List.NonEmpty  (NonEmpty)
+import Data.Void           (Void)
 import Dhall               (EvaluateSettings)
 import Dhall.Pretty        (detectCharacterSet)
 import Dhall.Pretty.Internal        (ChooseCharacterSet(..), chooseCharsetOrUseDefault)
 
+import Dhall.Parser      (Src)
 import Dhall.Syntax
     ( Expr (..)
     , Import (..)
@@ -183,6 +185,14 @@ freezeImportWithSettings
     -> FilePath
     -> Import
     -> IO Import
+integrityHashFallback
+    :: Maybe (Core.ReifiedNormalizer Void)
+    -> Expr Src Void
+    -> IO (Expr Void Void)
+integrityHashFallback customNormalizer expression =
+    Exception.evaluate
+        (Core.alphaNormalize (Core.normalizeWith customNormalizer expression))
+
 freezeImportWithSettings settings directory import_ = do
     let unprotectedImport =
             import_
@@ -194,13 +204,47 @@ freezeImportWithSettings settings directory import_ = do
 
     let status = Dhall.emptyStatusWithSettings settings directory
 
-    expression <- State.evalStateT (Dhall.Import.loadWith (Embed unprotectedImport)) status
+    let customNormalizer = view Dhall.normalizer settings
 
-    case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) expression of
-        Left  exception -> Exception.throwIO exception
-        Right _         -> return ()
+    (expression, status') <-
+        case customNormalizer of
+            Nothing -> do
+                ((loaded, _shared), status') <-
+                    State.runStateT
+                        (Dhall.Import.loadWithShared (Embed unprotectedImport))
+                        status
+                inferred <-
+                    State.evalStateT
+                        (Dhall.Import.typecheckLoaded
+                            (Embed unprotectedImport)
+                            loaded
+                        )
+                        status'
+                case inferred of
+                    Left exception -> Exception.throwIO exception
+                    Right _ -> return (loaded, status')
+            Just _ -> do
+                (loaded, status') <-
+                    State.runStateT
+                        (Dhall.Import.loadWith (Embed unprotectedImport))
+                        status
+                case Dhall.TypeCheck.typeWith (view Dhall.startingContext settings) loaded of
+                    Left exception -> Exception.throwIO exception
+                    Right _ -> return (loaded, status')
 
-    let normalizedExpression = Core.alphaNormalize (Core.normalizeWith (view Dhall.normalizer settings) expression)
+    maybeSemantics <-
+        Dhall.Import.lookupCachedImportSemantics status' unprotectedImport
+
+    normalizedExpression <-
+        case maybeSemantics of
+            Just importSemantics ->
+                Dhall.Import.alphaBetaNormalForIntegrityHash
+                    status'
+                    customNormalizer
+                    unprotectedImport
+                    importSemantics
+            Nothing ->
+                integrityHashFallback customNormalizer expression
 
     -- The semantic cache product is the encoded αβ-normal form.  Unhashed
     -- Code imports are no longer β-normalized by `loadWith`, so we must

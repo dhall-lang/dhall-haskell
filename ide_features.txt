@@ -1,0 +1,37 @@
+Features that are good to have in IDE support for Dhall.
+
+Marks describe the dhall-lsp-server on lsp-inline-let.
+[done] is implemented. [partial] is only partly there. [not done] is absent.
+
+- [done] Display typechecking and syntax errors
+- [not done] Suggest edits to fix errors when typechecking fails, when variables are undefined, when syntax errors are found
+- [done] Collapse/expand code regions and scopes: multi-line let, lambda, function type, record, union, non-empty list, if, merge, and text literal
+- [done] Go to definition of any variable, go to usages / list usages for any variable (including `x@n`, record fields, and union constructors; references are in the current file)
+- [partial] Load imported files and navigate in their source code. Clickable imports and go-to-definition open the fetched source, or a decoded semantic-cache expression. The opened file is not kept read-only
+- [partial] Decompile cached CBOR into Dhall source for a hashed import (go to definition, and `dhall.server.showOriginalSource`). There is no general browser for arbitrary CBOR files
+- [done] Tooltip: hover on a variable to see its type. The type is truncated at 16KiB. Hover shows the type only when the file typechecks
+- [done] Type error: the diagnostic and the Explain link say where the mismatch is and which types were expected and found
+- [partial] Assertion failures are reported as type errors with Explain. There is no separate view that prints both full normal forms up to a size limit
+- [done] Shown normal forms are capped (default 16KiB). Normalize selection also stops on an evaluation limit
+- [not done] Autocomplete possible arguments for curried functions
+- [not done] Autocomplete possible functions that apply to a given argument type
+- [partial] Autocomplete constructor names and record fields for a dotted name, and for an expression before a dot such as `(f x).` or `{ a = 1 }.` when the file typechecks once the dot is removed. A broken let, a failed import, and a lambda-bound type are not completed
+- [not done] Autocomplete lambdas in `merge`
+- [done] Autocomplete defined variables in scope, and built-ins
+- [not done] Autocomplete lambda blocks after a type annotation is given, without offering the name that is currently being defined
+- [partial] Fill in the inferred type for a `let` binding ("Annotate let"). Lambda arguments always carry a type in Dhall. Annotating an arbitrary subexpression is not implemented. The inlay on an unannotated `let` shows `: <type>`, cut at 60 characters, and inserts the annotation when the whole type fits
+- [done] Reduce a selection to normal form and replace it, refusing the edit when the result is too large
+- [not done] Show warning if the size of the normal form is much larger than the size of the source code for that expression
+- [partial] Beta-normalize a selection ("Normalize selection"), with a size limit. Alpha-normalize was removed. Eta-reduce is not implemented
+- [done] Freeze, refreeze, and unfreeze imports. A missing import keeps its hash
+- [done] Organize imports: drop unused import bindings, move the rest to the top, sort by name. Refused when a top-level name is repeated, when the file uses name@n, or when an import binding does not occupy whole lines
+- [done] Remove unused `let` definitions via lint. A binding that is an assertion, or that contains one, is kept. Unused bindings are also marked in diagnostics
+- [done] Rename variables within their definition's scope, including variables with de Bruijn indices
+- [not done] Autocomplete available symbols that can be imported from already imported files or from the standard prelude
+- [not done] Autocomplete available functions that may be left-applied to a given value
+- [done] Autoformat the Dhall code when it parses, including when it does not typecheck. Formatting is refused when parsing fails
+- [done] Refactor a selected subexpression into a local variable ("Extract let")
+- [done] Insert a type annotation into `let`, by inferring the type
+- [done] Inline a local variable. Refused when that would capture a name, when the body uses name@n, or when the value contains assert
+- [not done] Simplify arithmetic with Bool, Natural, Integer as its own edit. Normalize selection reduces arithmetic as part of a full normal form
+- [not done] Import from JSON / YAML, optionally with schemas

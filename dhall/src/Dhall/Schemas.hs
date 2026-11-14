@@ -148,14 +148,13 @@ rewriteWithSchemas
     -- ^ Expression to simplify using the supplied schemas
     -> IO (Expr Src Import)
 rewriteWithSchemas _schemas expression = do
-    resolvedSchemas    <- Import.load _schemas
-    resolvedExpression <- Import.load expression
+    (normalizedSchemas, schemasType) <-
+        Import.loadRelativeToTypecheckAndNormalize "." Import.UseSemanticCache _schemas
+    (normalizedExpression, expressionType) <-
+        Import.loadRelativeToTypecheckAndNormalize "." Import.UseSemanticCache expression
 
-    _ <- Core.throws (TypeCheck.typeOf resolvedSchemas)
-    _ <- Core.throws (TypeCheck.typeOf resolvedExpression)
-
-    let normalizedSchemas    = Normalize.normalize resolvedSchemas
-    let normalizedExpression = Normalize.normalize resolvedExpression
+    _ <- Core.throws schemasType
+    _ <- Core.throws expressionType
 
     typeMetadata <- case decodeSchemas normalizedSchemas of
         Just typeMetadata -> return typeMetadata

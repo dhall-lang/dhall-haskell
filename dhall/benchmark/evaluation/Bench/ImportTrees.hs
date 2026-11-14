@@ -1,11 +1,13 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Import-tree evaluation fixtures: normalize/*, large1–large6, k8s, prelude.
+-- | Import-tree evaluation fixtures: normalize/*, large1–large7, k8s, prelude.
 module Bench.ImportTrees
     ( benchmarks
     ) where
 
-import Control.Exception (throw)
+import Control.Exception (throw, throwIO)
 import Control.Monad (when)
+import Control.Monad.Trans.State.Strict (evalStateT)
 import Data.List (isInfixOf, isSuffixOf, sort)
 import Data.Text (Text)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
@@ -17,6 +19,7 @@ import qualified Data.ByteString.Lazy as ByteString
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import qualified Dhall
+import qualified Dhall.Context as Context
 import qualified Dhall.Core as Core
 import qualified Dhall.Import as Import
 import qualified Dhall.Parser as Parser
@@ -51,6 +54,27 @@ large5Directory = "benchmark/evaluation/large5"
 
 large6Directory :: FilePath
 large6Directory = "benchmark/evaluation/large6"
+
+large7Directory :: FilePath
+large7Directory = "benchmark/evaluation/large7"
+
+large7MainPath :: FilePath
+large7MainPath = large7Directory </> "big.dhall"
+
+large7Labels :: [String]
+large7Labels =
+    [ "large7"
+    , "large7.type_inlined"
+    , "large7.type_compositional"
+    , "large7.nf_inlined"
+    , "large7.nf_shared"
+    ]
+
+diamondImportDirectory :: FilePath
+diamondImportDirectory = "benchmark/evaluation/diamond_import"
+
+diamondImportTransitiveDirectory :: FilePath
+diamondImportTransitiveDirectory = "benchmark/evaluation/diamond_import_transitive"
 
 preludeImportDirectory :: FilePath
 preludeImportDirectory = "benchmark/evaluation/prelude_import"
@@ -93,6 +117,18 @@ large4Labels = phaseLabels "large4"
 
 large5CodeLabels :: [String]
 large5CodeLabels = phaseLabels "large5"
+
+diamondImportLabels :: [String]
+diamondImportLabels =
+    [ "diamond_import"
+    , "diamond_import." <> endToEndColdBenchName
+    ]
+
+diamondImportTransitiveLabels :: [String]
+diamondImportTransitiveLabels =
+    [ "diamond_import_transitive"
+    , "diamond_import_transitive." <> endToEndColdBenchName
+    ]
 
 preludeImportCodeLabels :: [String]
 preludeImportCodeLabels = coldResolveLabels "prelude_import"
@@ -314,6 +350,56 @@ parseLarge1 :: FilePath -> Text -> ParsedExpr
 parseLarge1 path text =
     either throw id (Parser.exprFromText path text)
 
+data Large7Bench = Large7Bench
+    { l7Parsed :: ParsedExpr
+    , l7Resolved :: ResolvedExpr
+    , l7Shared :: Core.Expr Parser.Src Import.ImportRef
+    , l7Status :: Import.Status
+    }
+
+loadLarge7 :: IO Large7Bench
+loadLarge7 = do
+    text <- timed "large7: read" (Text.IO.readFile large7MainPath)
+    parsed <- timed "large7: parse" $
+        either throwIO pure (Parser.exprFromText large7MainPath text)
+    let settings =
+            Lens.Micro.set Dhall.sourceName large7MainPath
+                (Lens.Micro.set Dhall.rootDirectory large7Directory Dhall.defaultInputSettings)
+    (resolved, shared, status) <-
+        timed "large7: resolve (no final typecheck)" $
+            Dhall.resolveSharedWithSettings settings parsed
+    say "  large7: ready"
+    pure
+        Large7Bench
+            { l7Parsed = parsed
+            , l7Resolved = resolved
+            , l7Shared = shared
+            , l7Status = status
+            }
+
+typecheckLarge7Compositional :: Large7Bench -> IO ResolvedExpr
+typecheckLarge7Compositional Large7Bench{ l7Parsed, l7Status } = do
+    result <-
+        evalStateT
+            (Import.typecheckWithAlreadyCheckedImports Context.empty l7Parsed)
+            l7Status
+    case result of
+        Just (Right typ) -> pure typ
+        Just (Left err) -> throwIO err
+        Nothing -> throwIO (userError "large7: compositional typecheck unavailable")
+
+large7BenchGroup :: Large7Bench -> Benchmark
+large7BenchGroup fixture =
+    bgroup "large7"
+        [ bench "type_compositional" (nfAppIO typecheckLarge7Compositional fixture)
+        , bench "nf_shared"
+            (nf
+                (Import.normalizeLoaded (l7Status fixture) :: Core.Expr Parser.Src Import.ImportRef -> ResolvedExpr)
+                (l7Shared fixture))
+        , bench "type_inlined" (nf typecheckResolvedExpr (l7Resolved fixture))
+        , bench "nf_inlined" (nf normalizeResolvedExpr (l7Resolved fixture))
+        ]
+
 benchmarks :: Maybe String -> IO [Benchmark]
 benchmarks mPattern = do
     examples <- loadExamples mPattern
@@ -381,6 +467,40 @@ benchmarks mPattern = do
     large6Variants <- loadLarge6PhaseVariants mPattern
     large6ColdResolveVariants <- loadLarge6ColdResolveVariants mPattern
 
+    let wantLarge7 = any (couldMatch mPattern) large7Labels
+    large7 <-
+        if wantLarge7
+            then Just <$> loadLarge7
+            else do
+                say "Skipping large7 (does not match pattern)"
+                pure Nothing
+
+    let wantDiamondImport = any (couldMatch mPattern) diamondImportLabels
+    diamondImport <-
+        if wantDiamondImport
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "diamond_import"
+                        diamondImportDirectory
+                        "main.dhall"
+            else do
+                say "Skipping diamond_import (does not match pattern)"
+                pure Nothing
+
+    let wantDiamondImportTransitive = any (couldMatch mPattern) diamondImportTransitiveLabels
+    diamondImportTransitive <-
+        if wantDiamondImportTransitive
+            then
+                Just
+                    <$> loadColdResolveBench
+                        "diamond_import_transitive"
+                        diamondImportTransitiveDirectory
+                        "main.dhall"
+            else do
+                say "Skipping diamond_import_transitive (does not match pattern)"
+                pure Nothing
+
     let wantPreludeImportCode = any (couldMatch mPattern) preludeImportCodeLabels
     preludeImportCode <-
         if wantPreludeImportCode
@@ -441,5 +561,8 @@ benchmarks mPattern = do
         , [ pipelineBenchGroup fixture | Just fixture <- [large5Code] ]
         , map pipelineBenchGroup large6Variants
         , map coldResolveBenchGroup large6ColdResolveVariants
+        , [ large7BenchGroup fixture | Just fixture <- [large7] ]
         , [ coldResolveBenchGroup fixture | Just fixture <- [preludeImportCode] ]
+        , [ endToEndColdBenchGroup fixture | Just fixture <- [diamondImport] ]
+        , [ endToEndColdBenchGroup fixture | Just fixture <- [diamondImportTransitive] ]
         ]

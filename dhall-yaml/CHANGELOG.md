@@ -1,4 +1,8 @@
 * Build against `dhall-1.42`
+* `Dhall.YamlToDhall.Options` carries a `RemoteImportMode`. `dhall-to-yaml-ng`
+  and `yaml-to-dhall` accept `--no-remote`, which rejects http and https
+  imports used as code, as Text, or as Bytes, including integrity-checked
+  cache hits.
 
 1.2.11
 

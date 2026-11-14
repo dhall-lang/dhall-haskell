@@ -11,6 +11,9 @@ packages:
   - dhall-openapi
   - dhall-toml
   - dhall-yaml
+allow-newer: true
+allow-newer-deps:
+  - dhall-lsp-server
 extra-deps:
   - ansi-wl-pprint-1.0.2@sha256:b817853b5310b8e7847469847608b664c3e75b4b30c332f2cb8c0d00751ef9c1,1915
   - co-log-core-0.3.2.0
@@ -32,6 +35,7 @@ extra-deps:
   - turtle-1.6.2@sha256:75710c60388e572bc17cbb08a81cbb4537f2207f8dcf187e9b1928d1e0b023a6,5767
   - typerep-map-0.5.0.0
   - connection-0.3.1
+  - unix-time-0.4.12
 nix:
   packages:
     - ncurses

@@ -23,10 +23,15 @@ module Dhall.DirectoryTree
 
 import Control.Applicative       (empty)
 import Control.Exception         (Exception)
+#if defined(javascript_HOST_ARCH)
+import Control.Monad             (when)
+import Data.Maybe                (isJust)
+#else
 import Control.Monad             (unless, when)
-import Data.Either.Validation    (Validation (..))
 import Data.Functor.Identity     (Identity (..))
 import Data.Maybe                (fromMaybe, isJust)
+#endif
+import Data.Either.Validation    (Validation (..))
 import Data.Sequence             (Seq)
 import Data.Text                 (Text)
 import Data.Void                 (Void)
@@ -42,7 +47,6 @@ import Dhall.Syntax
     , Var (..)
     )
 import System.FilePath           ((</>), isAbsolute, splitDirectories, takeDirectory)
-import System.PosixCompat.Types  (FileMode, GroupID, UserID)
 
 import qualified Control.Exception           as Exception
 import qualified Data.ByteString             as ByteString
@@ -59,12 +63,14 @@ import qualified Prettyprinter               as Pretty
 import qualified Prettyprinter.Render.String as Pretty
 import qualified System.Directory            as Directory
 import qualified System.FilePath             as FilePath
-#ifdef mingw32_HOST_OS
+#if defined(mingw32_HOST_OS)
 import System.IO.Error           (illegalOperationErrorType, mkIOError)
-#else
+#elif !defined(javascript_HOST_ARCH)
 import qualified System.Posix.User           as Posix
 #endif
+#if !defined(javascript_HOST_ARCH)
 import qualified System.PosixCompat.Files    as Posix
+#endif
 
 {- | Options affecting the interpretation of a directory tree specification.
 -}
@@ -313,6 +319,7 @@ makeType = Record . Map.fromList <$> sequenceA
             <$> (Pi AutoInferCharSet "_" <$> expected dec <*> pure (Var (V "tree" 0)))
 
 -- | Resolve a `User` to a numerical id.
+#if !defined(javascript_HOST_ARCH)
 getUser :: User -> IO UserID
 getUser (UserId uid) = return uid
 getUser (UserName name) =
@@ -332,6 +339,7 @@ getGroup (GroupName name) =
     where x = "System.Posix.User.getGroupEntryForName: not supported"
 #else
     Posix.groupID <$> Posix.getGroupEntryForName name
+#endif
 #endif
 
 -- | Process a `FilesystemEntry`. Writes the content to disk and apply the
@@ -394,6 +402,9 @@ hasMetadata entry
 
 -- | Set the metadata of an object referenced by a path.
 applyMetadata :: Entry a -> FilePath -> IO ()
+#if defined(javascript_HOST_ARCH)
+applyMetadata _ _ = return ()
+#else
 applyMetadata entry fp = do
     s <- Posix.getFileStatus fp
     let user = Posix.fileOwner s
@@ -408,9 +419,11 @@ applyMetadata entry fp = do
     let mode' = maybe mode (updateModeWith mode) (entryMode entry)
     unless (mode' == mode) $
         setFileMode fp $ modeToFileMode mode'
+#endif
 
 -- | Calculate the new `Mode` from the current mode and the changes specified by
 -- the user.
+#if !defined(javascript_HOST_ARCH)
 updateModeWith :: Mode Identity -> Mode Maybe -> Mode Identity
 updateModeWith x y = Mode
     { modeUser = combine modeUser modeUser
@@ -469,6 +482,7 @@ modeToFileMode mode = foldr Posix.unionFileModes Posix.nullFileMode $
 -- | Check whether the second `FileMode` is contained in the first one.
 hasFileMode :: FileMode -> FileMode -> Bool
 hasFileMode mode x = (mode `Posix.intersectFileModes` x) == x
+#endif
 
 {- | This error indicates that you supplied an invalid Dhall expression to the
      `toDirectoryTree` function.  The Dhall expression could not be translated

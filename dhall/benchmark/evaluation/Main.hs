@@ -25,8 +25,9 @@ import System.Environment (getArgs)
 import Test.Tasty.Bench (defaultMain)
 
 import Bench.Common (patternFromArgs, say)
+import qualified Bench.GraphMetrics as GraphMetrics
+import qualified Bench.ImportOverhead as ImportOverhead
 import qualified Bench.ImportTrees as ImportTrees
-import qualified Bench.Semisemantic as Semisemantic
 import qualified Bench.Substitutions as Substitutions
 
 -- Prep uses disk caches for Mode A validity + phase benches; Mode B/D fixtures
@@ -41,16 +42,17 @@ main = do
         Just pat -> say $ "Preparing benchmarks matching " <> show pat <> " (prep cache on)…"
 
     importTreeBenches <- ImportTrees.benchmarks mPattern
+    graphMetricBenches <- GraphMetrics.benchmarks mPattern
     -- many_files / composer_proxy fixtures live in temp dirs that must
     -- remain until tasty-bench finishes (the timed samples import those
     -- files). Substitutions.benchmarks holds that lifetime.
-    Substitutions.benchmarks mPattern $ \substitutionBenches -> do
-        semisemanticBenches <- Semisemantic.benchmarks mPattern
+    Substitutions.benchmarks mPattern $ \substitutionBenches ->
+        ImportOverhead.benchmarks mPattern $ \overheadBenches -> do
+            say "Starting tasty-bench…"
 
-        say "Starting tasty-bench…"
-
-        defaultMain $ concat
-            [ importTreeBenches
-            , substitutionBenches
-            , semisemanticBenches
-            ]
+            defaultMain $ concat
+                [ importTreeBenches
+                , graphMetricBenches
+                , substitutionBenches
+                , overheadBenches
+                ]

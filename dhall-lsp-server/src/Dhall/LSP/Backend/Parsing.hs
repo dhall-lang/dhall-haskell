@@ -8,10 +8,12 @@ module Dhall.LSP.Backend.Parsing
   , getForallIdentifier
   , binderExprFromText
   , holeExpr
+  , namesBeingDefined
   )
 where
 
 import Control.Applicative     (optional, (<|>))
+import Control.Lens            (toListOf)
 import Data.Functor            (void)
 import Data.Text               (Text)
 import Dhall.Core
@@ -20,6 +22,7 @@ import Dhall.Core
     , Import
     , Var (..)
     , makeFunctionBinding
+    , subExpressions
     )
 import Dhall.Parser
 import Dhall.Parser.Expression (importHash_, importType_, localOnly)
@@ -179,6 +182,22 @@ getImportLink src@(Src left _ text) =
 holeExpr :: Expr s a
 -- The illegal variable name ensures that it can't be bound by the user!
 holeExpr = Var (V "" 0)
+
+-- | Names of `let` bindings whose value is still the completion hole.
+--
+--   Those names are not in scope yet: the binding is the one being defined.
+namesBeingDefined :: Expr Src Import -> [Text]
+namesBeingDefined (Let (Binding _ variable _ _ _ value) rest)
+    | isHole value = variable : namesBeingDefined rest
+    | otherwise = namesBeingDefined rest
+namesBeingDefined (Note _ expression) = namesBeingDefined expression
+namesBeingDefined expression =
+    concatMap namesBeingDefined (toListOf subExpressions expression)
+
+isHole :: Expr s a -> Bool
+isHole (Var (V "" 0)) = True
+isHole (Note _ expression) = isHole expression
+isHole _ = False
 
 -- | Approximate the type-checking context at the end of the input. Tries to
 -- parse as many binders as possible. Very messy!
