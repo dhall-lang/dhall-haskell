@@ -568,6 +568,7 @@ Benchmark evaluation
         Bench.EvalAB
         Bench.GraphMetrics
         Bench.ImportOverhead
+        Bench.Micro
         Bench.ImportTrees
         Bench.Substitutions
     Build-Depends:

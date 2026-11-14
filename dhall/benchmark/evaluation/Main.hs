@@ -28,6 +28,7 @@ import Bench.Common (patternFromArgs, say)
 import qualified Bench.EvalAB as EvalAB
 import qualified Bench.GraphMetrics as GraphMetrics
 import qualified Bench.ImportOverhead as ImportOverhead
+import qualified Bench.Micro as Micro
 import qualified Bench.ImportTrees as ImportTrees
 import qualified Bench.Substitutions as Substitutions
 
@@ -45,6 +46,7 @@ main = do
     importTreeBenches <- ImportTrees.benchmarks mPattern
     graphMetricBenches <- GraphMetrics.benchmarks mPattern
     evalABBenches <- EvalAB.benchmarks mPattern
+    microBenches <- Micro.benchmarks mPattern
     -- many_files / composer_proxy fixtures live in temp dirs that must
     -- remain until tasty-bench finishes (the timed samples import those
     -- files). Substitutions.benchmarks holds that lifetime.
@@ -56,6 +58,7 @@ main = do
                 [ importTreeBenches
                 , graphMetricBenches
                 , evalABBenches
+                , microBenches
                 , substitutionBenches
                 , overheadBenches
                 ]
