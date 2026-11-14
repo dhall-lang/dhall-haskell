@@ -133,7 +133,9 @@ data EvalConfig = EvalConfig
     , countMkVal        :: !Bool
     }
 
--- | Default: identity counters on; speed caches off. Enabling caches is still
+-- | Default: identity counters on; closure interning off; speed caches off.
+-- Closure intern ids are unused while caches are off, and interning every
+-- lambda body dominated pure evaluation. Enabling caches is still
 -- unsafe under threaded Template Haskell: insert-before-force was fixed, but
 -- TH compilation of @Dhall.Test.TH@ still blackholes with caches on. Use
 -- 'cacheOnConfig' for runtime measurement outside TH.
@@ -143,13 +145,13 @@ defaultEvalConfig = EvalConfig
     , cacheCap        = 10000
     , internSharing   = SharingOn
     , assignIds       = True
-    , internOnClosure = True
+    , internOnClosure = False
     , countMkVal      = False
     }
 
 -- | Opt-in bounded memos for runtime measurement (not safe as the TH default).
 cacheOnConfig :: EvalConfig
-cacheOnConfig = defaultEvalConfig { enableCache = True }
+cacheOnConfig = defaultEvalConfig { enableCache = True, internOnClosure = True }
 
 -- | Oracle: caches disabled (zero insertions).
 cacheOffConfig :: EvalConfig
