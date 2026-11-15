@@ -313,7 +313,8 @@ dhallToNix e = do
     -- `denote` forgets source spans so re-typechecking @merge@ scrutinees does
     -- not require a `Pretty s` constraint.
     annotated <- annotateMergeScrutinees Dhall.Context.empty
-        (Dhall.Core.denote (rewriteShadowed (Dhall.Core.normalize e)))
+        -- TODO: read the canonical graph instead of materializing an 'Expr'.
+        (Dhall.Core.denote (rewriteShadowed (Dhall.Core.normalizeToExprLegacy e)))
     loop' Data.Map.empty annotated
   where
     untranslatable = Nix.attrsE []
@@ -710,7 +711,7 @@ dhallToNix e = do
         -- named `None` / `Some`, so `annotateMergeScrutinees` records the
         -- scrutinee type in an `Annot` wrapper before we get here.
         let (union, mTy) = peelScrutineeType union0
-        case fmap (dropAnnot . Dhall.Core.normalize) mTy of
+        case fmap (dropAnnot . Dhall.Core.normalizeToExprLegacy) mTy of
             Just (App Optional _) ->
                 translateOptionalMerge handlers union
             Just (Union _) ->

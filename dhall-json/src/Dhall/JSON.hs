@@ -413,7 +413,8 @@ Right "{\"foo\":1,\"bar\":\"ABC\"}"
 dhallToJSON
     :: Expr s Void
     -> Either CompileError Value
-dhallToJSON e0 = loop (Core.alphaNormalize (Core.normalize e0))
+-- TODO: read the canonical graph instead of materializing an 'Expr'.
+dhallToJSON e0 = loop (Core.renote (Core.alphaNormalize (Core.normalizeToExprLegacy e0)))
   where
     loop e = case e of
         Core.BoolLit a -> return (toJSON a)
@@ -718,7 +719,7 @@ defaultConversion = Conversion
 -}
 convertToHomogeneousMaps :: Conversion -> Expr s Void -> Expr s Void
 convertToHomogeneousMaps NoConversion e0 = e0
-convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
+convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.renote (Core.normalizeToExprLegacy e0))
   where
     loop e = case e of
         Core.Const a ->

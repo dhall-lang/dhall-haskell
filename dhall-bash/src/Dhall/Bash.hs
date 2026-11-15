@@ -222,7 +222,8 @@ dhallToStatement
     -- ^ Variable to @declare@ or @unset@
     -> Either StatementError ByteString
     -- ^ Bash statement or compile failure
-dhallToStatement expr0 var0 = go (Dhall.Core.normalize expr0)
+-- TODO: read the canonical graph instead of materializing an 'Expr'.
+dhallToStatement expr0 var0 = go (Dhall.Core.normalizeToExprLegacy expr0)
   where
     var = Text.ShellEscape.bytes (Text.ShellEscape.bash var0)
 
@@ -342,7 +343,7 @@ dhallToExpression
     -- ^ Dhall expression to compile
     -> Either ExpressionError ByteString
     -- ^ Bash expression or compile failure
-dhallToExpression expr0 = go (Dhall.Core.normalize expr0)
+dhallToExpression expr0 = go (Dhall.Core.normalizeToExprLegacy expr0)
   where
     go (BoolLit a) =
         go (TextLit (if a then "true" else "false"))

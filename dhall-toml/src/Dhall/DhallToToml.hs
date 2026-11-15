@@ -244,7 +244,8 @@ Right "bar = \"ABC\"\nfoo = 1\n"
 -}
 dhallToToml :: Expr s Void -> Either CompileError TOML
 dhallToToml expression = do
-    record <- assertRecordLit (Core.normalize expression)
+    -- TODO: read the canonical graph instead of materializing an 'Expr'.
+    record <- assertRecordLit (Core.renote (Core.normalizeToExprLegacy expression))
     toTomlTable record
 
 -- empty union alternative like < A | B >.A

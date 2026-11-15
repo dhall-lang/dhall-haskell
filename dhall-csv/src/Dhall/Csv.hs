@@ -212,7 +212,8 @@ insert = Pretty.renderStrict . Dhall.Pretty.layout . Dhall.Util.insert
 dhallToCsv
     :: Expr s Void
     -> Either CompileError (Seq NamedRecord)
-dhallToCsv e0 = listConvert $ Core.normalize e0
+-- TODO: read the canonical graph instead of materializing an 'Expr'.
+dhallToCsv e0 = listConvert $ Core.renote (Core.normalizeToExprLegacy e0)
   where
     listConvert :: Expr Void Void -> Either CompileError (Seq NamedRecord)
     listConvert (Core.ListLit _ a) = traverse recordConvert a

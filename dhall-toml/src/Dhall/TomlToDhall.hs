@@ -174,7 +174,8 @@ instance Exception CompileError where
             "missing key: " <> show e
 
 tomlToDhall :: Expr Src Void -> TOML -> Either CompileError (Expr Src Void)
-tomlToDhall schema toml = objectToDhall (Core.normalize schema) (tomlToObject toml)
+-- TODO: read the canonical graph instead of materializing an 'Expr'.
+tomlToDhall schema toml = objectToDhall (Core.renote (Core.normalizeToExprLegacy schema)) (tomlToObject toml)
 
 valueToDhall
     :: Expr Src Void -> Value t -> Either CompileError (Expr Src Void)

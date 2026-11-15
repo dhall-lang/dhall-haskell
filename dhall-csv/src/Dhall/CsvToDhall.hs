@@ -266,7 +266,8 @@ typeCheckSchemaExpr compileException expr =
     of the output.
 -}
 dhallFromCsv :: Conversion -> ExprX -> [NamedRecord] -> Either CompileError ExprX
-dhallFromCsv Conversion{..} typeExpr = listConvert (Core.normalize typeExpr)
+-- TODO: read the canonical graph instead of materializing an 'Expr'.
+dhallFromCsv Conversion{..} typeExpr = listConvert (Core.renote (Core.normalizeToExprLegacy typeExpr))
   where
     listConvert :: ExprX -> [NamedRecord] -> Either CompileError ExprX
     listConvert (Core.App Core.List recordType@(Core.Record _)) [] = return $ Core.ListLit (Just recordType) Sequence.empty

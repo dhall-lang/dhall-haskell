@@ -434,12 +434,18 @@ typecheckInlined settings expr =
 --
 --   A custom normalizer sees the inlined tree.  Otherwise the shared twin
 --   from 'load' or 'loadCollected' is evaluated, when this cache has one.
+--   The result is materialized to an 'Expr' for hashing and for callers that
+--   still match on constructors. Selection text shown to the user goes
+--   through 'normalizeWithContextBounded', which is the presentation form.
 normalize :: EvaluateSettings -> Cache -> WellTyped -> Normal
 normalize settings cache (WellTyped expr) =
     Normal $
         case (view Dhall.normalizer settings, cacheEval cache) of
             (Nothing, Just (status, shared)) ->
-                Import.normalizeLoaded status shared
+                Dhall.renote
+                    ( Dhall.exprFromCanonical
+                        ( Import.canonicalLoaded status shared )
+                    )
             _ ->
                 Dhall.normalizeWith (view Dhall.normalizer settings) expr
 
