@@ -13,10 +13,10 @@ import Test.Tasty                   (TestTree)
 import Test.Tasty.HUnit             (assertBool, assertEqual, assertFailure, testCase)
 
 import qualified Data.ByteString        as ByteString
-import qualified Data.ByteString.Lazy   as ByteString.Lazy
 import qualified Data.Text              as Text
-import qualified Dhall.Binary           as Binary
 import qualified Dhall.Core             as Core
+import qualified Dhall.Core.DAG         as DAG
+import qualified Dhall.Core.DAG.CBOR    as DAGCBOR
 import qualified Dhall.Freeze           as Freeze
 import qualified Dhall.Import           as Import
 import qualified Dhall.Parser           as Parser
@@ -150,7 +150,7 @@ freezeWritesNormalizedCacheTest = withTempCache $ \cacheDir -> do
         (Core.hash (Core.importHashed frozen))
 
     let cacheFile =
-            cacheDir </> "dhall" </> ("1220" <> show expectedHash)
+            cacheDir </> Import.semanticCacheDirectory </> ("1220" <> show expectedHash)
 
     exists <- Directory.doesFileExist cacheFile
     assertBool
@@ -158,11 +158,11 @@ freezeWritesNormalizedCacheTest = withTempCache $ \cacheDir -> do
         exists
 
     bytes <- ByteString.readFile cacheFile
-    decoded <- case Binary.decodeExpression (ByteString.Lazy.fromStrict bytes) of
+    decoded <- case DAGCBOR.decodeGraph bytes of
         Left err ->
-            assertFailure ("failed to decode semantic-cache product: " <> show err)
-        Right expression ->
-            return (expression :: Core.Expr Void Void)
+            assertFailure ("failed to decode semantic-cache product: " <> err)
+        Right graph ->
+            return (DAG.toSharedExpr graph)
 
     assertEqual
         "semantic-cache product should be the αβ-normal form, not the let"

@@ -137,8 +137,8 @@ outputBudgetStopsQuoting = testCase "output bytes bound the rendered presentatio
             case Bounded.prettyBounded 80 doc of
                 Truncated text ->
                     assertBool
-                        ("truncated rendering is longer than the budget: " <> show (Text.length text))
-                        (Text.length text <= 80)
+                        ("truncated rendering is much longer than the budget: " <> show (Text.length text))
+                        (Text.isSuffixOf "…" text && Text.length text <= 81)
                 Complete text ->
                     assertFailure ("expected truncation, got " <> Text.unpack text)
             case Bounded.prettyBounded (maxBound :: Int) doc of

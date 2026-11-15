@@ -16,9 +16,11 @@ import Data.Void                        (Void)
 import Dhall.Src                        (Src)
 import System.FilePath                  (takeDirectory, takeFileName, (</>))
 import Test.Tasty                       (TestTree)
-import Test.Tasty.HUnit                 (assertBool, assertEqual, testCase)
+import Test.Tasty.HUnit                 (assertBool, assertEqual, assertFailure, testCase)
 
+import qualified Data.ByteString        as ByteString
 import qualified Data.Text              as Text
+import qualified Dhall.Core.DAG.CBOR    as DAGCBOR
 import qualified Dhall
 import qualified Dhall.Core             as Core
 import qualified Dhall.Import           as Import
@@ -60,11 +62,11 @@ withTempCache action =
 semanticCacheFile :: FilePath -> Core.Expr s Void -> FilePath
 semanticCacheFile cacheDir expr =
     let hash = Import.hashExpression (Core.denote expr)
-    in  cacheDir </> "dhall" </> ("1220" <> show hash)
+    in  cacheDir </> Import.semanticCacheDirectory </> ("1220" <> show hash)
 
 clearSemanticCache :: FilePath -> IO ()
 clearSemanticCache cacheDir = do
-    let semanticCacheDir = cacheDir </> "dhall"
+    let semanticCacheDir = cacheDir </> Import.semanticCacheDirectory
     exists <- Directory.doesDirectoryExist semanticCacheDir
     when exists (Directory.removeDirectoryRecursive semanticCacheDir)
 
@@ -166,6 +168,14 @@ fillThenHitTest = withTempCache $ \cacheDir -> do
     cachedAfterFill <- Directory.doesFileExist cacheFile
     assertBool "matching fallback should write the semantic cache" cachedAfterFill
 
+    cachedBytes <- ByteString.readFile cacheFile
+    assertBool
+        "semantic cache bytes are DAG CBOR, not tree CBOR"
+        (ByteString.isInfixOf "Dhall-DAG" cachedBytes)
+    case DAGCBOR.decodeGraph cachedBytes of
+        Left err -> assertFailure err
+        Right _  -> pure ()
+
     step3 <- Dhall.inputExpr ("missing " <> hashCode <> " ? 50")
     assertNormalizedEqual
         "after fill, resolution should come from the semantic cache"
@@ -238,7 +248,7 @@ hashMismatchDoesNotFillTest = withTempCache $ \cacheDir -> do
         step2
 
     let wrongCacheFile =
-            cacheDir </> "dhall" </>
+            cacheDir </> Import.semanticCacheDirectory </>
             "122000000000000000000000000000000000000000000000000000000011111111"
 
     cachedWrongHash <- Directory.doesFileExist wrongCacheFile

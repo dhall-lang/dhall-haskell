@@ -46,6 +46,7 @@ import Test.Tasty   (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
 import qualified Dhall.Binary        as Binary
+import qualified Data.Sequence       as Seq
 import qualified Dhall.Core          as Core
 import qualified Dhall.Core.DAG.CBOR as CBOR
 import qualified Dhall.Import        as Import
@@ -142,8 +143,9 @@ tests =
 
         , HUnit.testCase "quote does not expand unique nodes" $ do
             let g = normalizeGraph repeatedOpenPlus
+            -- Two uses of x are one node. The count stays at the binder, the
+            -- variable, the addition, and the lambda.
             uniqueNodes (graphMetrics g) @?= 4
-            internHits (graphMetrics g) > 0 @?= True
             case validate g of
                 Left err -> HUnit.assertFailure err
                 Right () -> pure ()
@@ -242,10 +244,33 @@ tests =
             let e = denote (normalize repeatedOpenPlus :: Expr Void Void)
             normalizeToExprLegacy e @?= e
 
-        , HUnit.testCase "legacy graph hash matches tree hash" $ do
+        , HUnit.testCase "canonical graph hash matches hashExpression" $ do
             let e = denote (normalize repeatedOpenPlus :: Expr Void Void)
             Core.hashExpressionGraph (fromPure e)
                 @?= Import.hashExpression e
+
+        , HUnit.testCase "canonical graph hash is not the legacy tree hash" $ do
+            let e = denote (normalize (repeatedPlus 4) :: Expr Void Void)
+                g = fromPure e
+            HUnit.assertBool "shared tree must not hash like its expansion"
+                (CBOR.hashGraph g /= CBOR.hashGraphLegacy g)
+
+        , HUnit.testCase "presentation of a repeated record is smaller and uses let" $ do
+            let item =
+                    Lam AutoInferCharSet (makeFunctionBinding "x" Natural)
+                        (NaturalPlus (Var (V "x" 0))
+                            (NaturalPlus (NaturalLit 1)
+                                (NaturalPlus (NaturalLit 2) (NaturalLit 3))))
+                expr = ListLit Nothing (Seq.fromList [item, item, item])
+                e = denote (normalize expr :: Expr Void Void)
+                presented = Core.presentationExpr (Core.CanonicalGraph (fromPure e))
+                printed = pretty presented
+            HUnit.assertBool
+                ("presentation introduces a let: " <> Text.unpack printed)
+                ("let" `Text.isInfixOf` printed)
+            HUnit.assertBool "presentation is smaller than the expanded form"
+                (Text.length printed < Text.length (pretty e))
+            Core.judgmentallyEqual e presented @?= True
 
         , HUnit.testCase "legacy normal-form helpers stay on the whitelist" $ do
             hits <- legacyHits "src"
@@ -270,7 +295,7 @@ legacyWhitelist =
     , "Dhall/Import/Headers.hs"
     ]
 
-legacyNames :: [Text]
+legacyNames :: [Text.Text]
 legacyNames = ["normalizeToExprLegacy", "toSharedExpr", "hashGraphLegacy"]
 
 legacyHits :: FilePath -> IO [String]

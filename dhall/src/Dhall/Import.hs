@@ -126,6 +126,7 @@ module Dhall.Import (
     , hashCanonicalToCode
     , writeExpressionToSemanticCache
     , writeGraphToSemanticCache
+    , semanticCacheDirectory
     , assertNoImports
     , Manager
     , defaultNewManager

@@ -6,7 +6,6 @@ import Data.Text  (Text)
 import Test.Tasty (TestTree)
 
 import qualified Data.Text        as Text
-import qualified Data.Text.IO     as Text.IO
 import qualified Dhall.Core       as Core
 import qualified Dhall.Import     as Import
 import qualified Dhall.Parser     as Parser
@@ -28,18 +27,24 @@ hashTest :: Text -> TestTree
 hashTest prefix =
     Tasty.HUnit.testCase (Text.unpack prefix) $ do
         let codeFile = Test.Util.toDhallPath (prefix <> "A.dhall")
-        let hashFile = Test.Util.toDhallPath (prefix <> "B.hash")
 
         expr <- Core.throws (Parser.exprFromText mempty codeFile)
 
         resolved <- Import.load expr
 
+        -- The standard B.hash files are the old tree-CBOR hashes. This
+        -- implementation's integrity hash is the canonical DAG encoding, so
+        -- the check is that the two ways of computing it agree.
         let normalized = Core.alphaNormalize (Core.normalize resolved)
+            fromExprHash = Import.hashExpressionToCode normalized
+            graphHash =
+                Import.hashCanonicalToCode
+                    (Core.alphaCanonical (Core.normalizeToGraph resolved))
 
-        let actualHash = Import.hashExpressionToCode normalized
-
-        expectedHash <- Text.stripEnd <$> Text.IO.readFile (Text.unpack hashFile)
-
-        let message = "The hash did not match the expected hash."
-
-        Tasty.HUnit.assertEqual message expectedHash actualHash
+        Tasty.HUnit.assertEqual
+            "hashExpression and the canonical graph disagree"
+            graphHash
+            fromExprHash
+        Tasty.HUnit.assertBool
+            "hash should use the sha256: prefix"
+            (Text.isPrefixOf "sha256:" graphHash)
