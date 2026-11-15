@@ -667,3 +667,100 @@ Default semantic hashes stay on legacy tree CBOR. `encodeGraph` is
 experimental and is not what `hashExpression` writes. Speed caches stay
 off unless a caller passes `cacheOnConfig`.
 
+## 18. Performance recovery
+
+Compared with `main` at `f4fefff7`. Times are criterion means.
+
+`main`:
+
+| Case | Time | Allocated |
+| --- | --- | --- |
+| `normalize.ChurchEval.evaluation` | 368 ms | 653 MB |
+| `large1.evaluation` | 114 ms | 253 MB |
+| `k8s.file3.evaluation` | 0.46 ms | 2.8 MB |
+| `large7.nf_inlined` | 2.7 ms | 10 MB |
+| `large3.typecheck` | 3.60 s | 9.3 GB |
+
+The slowdown was bookkeeping the default evaluator never reads, plus
+`quoteGraph` re-walking a heap-shared value on every occurrence.
+Evaluation itself still shares let-bound and imported thunks. Caches stay
+off: the run state is one process-global `IORef`, and `withEvalRun` only
+forces WHNF, so a lazy value forced after the next run can see another
+builder's ids.
+
+### Merged
+
+- Closure interning is off unless caches are on. `large7.nf_inlined` fell
+  from about 1.46 s to 8.5 ms. `ChurchEval` fell from about 768 ms to 548 ms.
+  `k8s.file3.evaluation` did not move; that cost is the quote, not
+  `internBody`.
+- `assignIds` is off unless caches are on. The counters are not bumped.
+  `freshValId`, `freshEnvId`, and `evalCacheEnabled` are still called, and
+  each call still reads an `IORef`. `ChurchEval` fell from 548 ms to 434 ms
+  and 1.4 GB allocated. Allocation did not follow the counter.
+- `quoteGraph` remembers a non-atomic value together with the `Names` spine
+  it was quoted under. The memo lives in that quote's `ST`, not in the
+  global run. Atoms skip it. A memo keyed only by the value is wrong: the
+  same thunk under two binders has different de Bruijn indices, and
+  `large1` failed to typecheck that way. Closed-only was correct and did
+  not help `k8s`, because the shared values are not marked closed, and it
+  slowed `large1` from 167 ms to 501 ms.
+
+After the quote memo, against the ids-off parent and against `main`:
+
+| Case | Parent | This tip | `main` |
+| --- | --- | --- | --- |
+| `ChurchEval` | 434 ms, 1.4 GB | 437 ms, 1.4 GB | 368 ms, 653 MB |
+| `large1.evaluation` | 167 ms, 370 MB | 137 ms, 179 MB | 114 ms, 253 MB |
+| `k8s.file3.evaluation` | 333 ms, 391 MB | 2.47 ms, 4.9 MB | 0.46 ms, 2.8 MB |
+| `large7.nf_inlined` | ~8.5 ms | 10.1 ms, 17 MB | 2.7 ms, 10 MB |
+
+Normalization (308) and semantic-hash (156) tests passed on this tip.
+
+### Not merged
+
+These stay on their branches so they are not retried without a new measurement.
+
+- `experiment/public-tree-quote` (`quote` via `quoteBounded`). `k8s.file3.evaluation` fell to 1.20 ms. `large1.evaluation` rose from 183 ms to 353 ms and `large7.nf_inlined` from 8.5 ms to 18 ms. The state-monad walk copies diamonds that the graph quote was sharing.
+- `experiment/no-id-calls`. `freshValId`, `freshEnvId`, `internBody`, and `evalCacheEnabled` are constants, and typecheck does not build an infer-memo key. `ChurchEval` fell from 434 ms to 394 ms. Allocated bytes stayed 1.4 GB, so the extra allocation is the `Identified` wrapper, not the `IORef` traffic. `large1` and `k8s` did not move. `large3.typecheck` was 7.35 s. Not merged: `cacheOnConfig` would no longer assign ids or fill memos, and the fixtures that miss the gate did not move.
+- Infer does call `internBody` on every node. With closure interning off, that returns `NodeId 0` after an `IORef` read and does not bump `internBodyCalls`. `lookupInferMemo` still takes the run lock on every node. Skipping both is part of `experiment/no-id-calls`, not of this tip.
+- `a4224a06` (treat every `Extend` frame as not closed, so `envClosed` does not force the bound value) was not ported. The closedness flag is already a lazy `Bool`. The quote memo keys on the value and the name spine, so it does not need that flag. Forcing it in `envClosed` remains.
+- `experiment/shared-core-kept` was not re-benchmarked and was not ported. It makes `eval` monadic and turns caches on inside `ST`. An earlier commit on that branch recorded `ChurchEval` time moving into the monad binds. The per-run `ST` port and an evaluator over `CoreGraph` `NodeId`s were not started; the quote memo is the change that moved the pathological quote.
+
+### Gate
+
+Targets were `normalize` and typecheck at most 1.10× `main`, and `k8s` and `large7` at most 1.0× `main`. This tip does not meet them: `ChurchEval` is 1.19×, `large1` is 1.20×, `k8s.file3.evaluation` is about 5×, `large7.nf_inlined` is about 4×. `main`'s evaluator was not restored. The quote memo is a large win on the shared quote (333 ms to 2.47 ms) and a smaller win on `large1`, and dropping it would give those back.
+
+### Hash and CBOR
+
+`fromExpr` has no pointer memo, and `hashGraphLegacy` encodes `toSharedExpr`, so it walks the expanded tree. A smaller encoding with a slower hash is not a reason to make DAG-CBOR the default. Phase 8 stays off.
+
+Repeated `x + x` tree, depth 20 (21 unique nodes, 6,291,453 tree bytes, 117 graph bytes):
+
+| Bench | Time | Allocated |
+| --- | --- | --- |
+| `hash_tree` (`hashExpression`) | 156 ms | 412 MB |
+| `hash_graph` (`fromExpr` + `hashGraphLegacy`) | 276 ms | 596 MB |
+| `cbor_tree` | 81 ms | 286 MB |
+| `cbor_graph` (`fromExpr` + `encodeGraph`) | 152 ms | 304 MB |
+
+Normalized `large1` (5,499 unique nodes, 5,717,082 tree bytes, 139,920 graph bytes):
+
+| Bench | Time | Allocated |
+| --- | --- | --- |
+| `hash_tree` | 139 ms | 349 MB |
+| `hash_from_expr` | 234 ms | 422 MB |
+| `cbor_tree` | 40 ms | 225 MB |
+| `cbor_graph` | 155 ms | 219 MB |
+
+Normalized `k8s.file3` (330 unique nodes, 39,827 tree bytes, 9,689 graph bytes):
+
+| Bench | Time | Allocated |
+| --- | --- | --- |
+| `hash_tree` | 533 μs | 2.2 MB |
+| `hash_from_expr` | 1.02 ms | 3.0 MB |
+| `cbor_tree` | 278 μs | 1.7 MB |
+| `cbor_graph` | 894 μs | 3.0 MB |
+
+The graph encoding is smaller in every case (about 54,000× on the synthetic tree, 41× on `large1`, 4× on `k8s.file3`). Building the graph and hashing it is slower than hashing the tree, because interning walks expanded constructors and the legacy hash expands the graph again. DAG-CBOR stays experimental.
+
