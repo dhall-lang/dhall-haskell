@@ -57,6 +57,7 @@ import qualified Data.Time                         as Time
 import qualified Data.Typeable                     as Typeable
 import qualified Dhall
 import qualified Dhall.Core                        as Core
+import qualified Dhall.Core.NormalForm             as NormalForm
 import qualified Dhall.Import
 import qualified Dhall.Map
 import qualified Dhall.Pretty
@@ -108,8 +109,13 @@ staticDhallExpression text = do
                     (Dhall.Import.typecheckLoaded parsed resolved)
                     status
 
+        -- Legacy: Template Haskell splices an 'Expr' AST. The value is the
+        -- canonical graph, materialized at this boundary only.
         let normalized =
-                Dhall.Import.normalizeLoaded status shared :: Expr Src Void
+                Core.renote
+                    ( NormalForm.exprFromCanonical
+                        ( Dhall.Import.canonicalLoaded status shared )
+                    ) :: Expr Src Void
 
         pure (normalized, status)
 

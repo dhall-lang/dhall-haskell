@@ -295,15 +295,11 @@ normalizeForOutput
 normalizeForOutput e = do
   env <- get
 
-  case replMaxOutputSize (replLimits env) of
-    Nothing ->
-      return (Dhall.normalizeWithContext (envContext env) e)
-
-    Just nbytes -> do
-      let (normalized, _cut) =
-              Dhall.normalizeWithContextBounded nbytes (envContext env) e
-
-      return normalized
+  -- The printed form is the CSE presentation. A byte budget is applied
+  -- when the text is rendered, not by stopping the quote early.
+  let (presented, _) =
+          Dhall.normalizeWithContextBounded maxBound (envContext env) e
+  return presented
 
 
 typeCheck

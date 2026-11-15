@@ -1183,8 +1183,9 @@ functionWith
 functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
     Decoder extractOut expectedOut
   where
-    -- 'Core.normalize' rebuilds a physically shared 'Expr' from a
-    -- hash-consed graph; generic tree walks remain occurrence-sensitive.
+    -- Decoder boundary. 'extractIn' matches 'Expr' constructors. A custom
+    -- normalizer is itself an Expr function, so this application stays on
+    -- that type. TODO: match the canonical graph once decoders do.
     normalizer_ = Just (getInputNormalizer inputNormalizer)
 
     extractOut e = pure (\i ->
@@ -1192,7 +1193,7 @@ functionWith inputNormalizer (Encoder {..}) (Decoder extractIn expectedIn) =
         in case extractIn (Core.normalizeWith normalizer_ applied) of
             Success o  -> o
             Failure _ ->
-                case extractIn (Core.normalize applied) of
+                case extractIn (Core.renote (Core.normalizeToExprLegacy applied)) of
                     Success o  -> o
                     Failure _e ->
                         error "FromDhall: You cannot decode a function if it does not have the correct type"

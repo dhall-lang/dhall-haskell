@@ -86,6 +86,7 @@ import qualified Control.Monad.Trans.State.Strict as State
 import qualified Data.Text.IO
 import qualified Dhall.Context
 import qualified Dhall.Core                       as Core
+import qualified Dhall.Core.NormalForm            as NormalForm
 import qualified Dhall.Import
 import qualified Dhall.Parser
 import qualified Dhall.Pretty.Internal
@@ -433,8 +434,13 @@ normalizeResolved
 normalizeResolved settings status shared resolved =
     case view normalizer settings of
         Nothing ->
-            Dhall.Import.normalizeLoaded status shared
+            Core.renote
+                ( NormalForm.exprFromCanonical
+                    ( Dhall.Import.canonicalLoaded status shared )
+                )
         Just _ ->
+            -- A custom normalizer is an Expr hook. The decoder still matches
+            -- on the tree it returns.
             Core.normalizeWith (view normalizer settings) resolved
 
 -- | As 'emptyStatus' but applying 'EvaluateSettings'.
@@ -633,7 +639,7 @@ rawInput
     -> f a
     -- ^ The decoded value in Haskell
 rawInput (Decoder {..}) expr =
-    case extract (Core.normalize expr) of
+    case extract (Core.renote (NormalForm.exprFromCanonical (NormalForm.normalizeToGraph expr))) of
         Success x  -> pure x
         Failure _e -> empty
 
