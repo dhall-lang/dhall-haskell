@@ -11,6 +11,7 @@ module Bench.ImportOverhead
 
 import Control.Exception (throw)
 import Control.Monad (void)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Void (Void)
 import Text.Printf (printf)
@@ -74,12 +75,18 @@ benchmarks mPattern k
         k []
     | otherwise =
         Temp.withSystemTempDirectory "dhall-import-overhead" $ \root -> do
-            custom <- customNormalizerBenches mPattern (root </> "custom-normalizer")
-            alt <- importAltBenches mPattern (root </> "import-alt")
+            custom <- orEmpty "import_overhead.custom_normalizer" $
+                customNormalizerBenches mPattern (root </> "custom-normalizer")
+            alt <- orEmpty "import_overhead.import_alt" $
+                importAltBenches mPattern (root </> "import-alt")
             subst <- pure (rootSubstitutionBenches mPattern)
-            context <- startingContextBenches mPattern (root </> "starting-context")
-            projection <- projectionBenches mPattern
+            context <- orEmpty "import_overhead.starting_context" $
+                startingContextBenches mPattern (root </> "starting-context")
+            projection <- orEmpty "import_overhead.projection" $
+                projectionBenches mPattern
             k (concat [custom, alt, subst, context, projection])
+  where
+    orEmpty label action = fromMaybe [] <$> tryLoad label action
 
 customNormalizerBenches :: Maybe String -> FilePath -> IO [Benchmark]
 customNormalizerBenches mPattern dir

@@ -24,6 +24,7 @@ import Bench.Common
     , resolveTypecheckNormalizeCold
     , say
     , substitutionsColdResolveBenchGroup
+    , tryLoad
     , timed
     )
 
@@ -678,8 +679,8 @@ benchmarks mPattern k = do
     substitutionsCode <-
         if wantSubstitutionsCode
             then
-                Just
-                    <$> loadColdResolveBenchWithSettings
+                tryLoad "substitutions" $
+                    loadColdResolveBenchWithSettings
                         "substitutions"
                         substitutionsDirectory
                         "pipeline-code.dhall"
@@ -712,8 +713,8 @@ benchmarks mPattern k = do
                     substitutionsManyFilesCode <-
                         case (wantSubstitutionsManyFilesCode, manyFilesRoot) of
                             (True, Just dir) ->
-                                Just
-                                    <$> loadColdResolveBenchWithSettings
+                                tryLoad "substitutions.many_files" $
+                                    loadColdResolveBenchWithSettings
                                         "substitutions.many_files"
                                         dir
                                         "pipeline-code.dhall"
@@ -725,8 +726,8 @@ benchmarks mPattern k = do
                     composerProxyCode <-
                         case (wantComposerProxyCode, composerProxyRoot) of
                             (True, Just dir) ->
-                                Just
-                                    <$> loadColdResolveBenchWithSettings
+                                tryLoad "substitutions.composer_proxy" $
+                                    loadColdResolveBenchWithSettings
                                         "substitutions.composer_proxy"
                                         dir
                                         "pipeline-code.dhall"
@@ -738,8 +739,8 @@ benchmarks mPattern k = do
                     composerProxyManyImportsCode <-
                         case (wantComposerProxyManyImportsCode, manyImportsRoot) of
                             (True, Just dir) ->
-                                Just
-                                    <$> loadColdResolveBenchWithSettings
+                                tryLoad "substitutions.composer_proxy.many_imports" $
+                                    loadColdResolveBenchWithSettings
                                         "substitutions.composer_proxy.many_imports"
                                         dir
                                         "pipeline-code.dhall"
@@ -750,10 +751,11 @@ benchmarks mPattern k = do
 
                     case (composerProxyManyImportsCode, miwCode warmCaches) of
                         (Just fixture, Just cacheHome) ->
-                            warmManyImportsCache
-                                "composer_proxy.many_imports: warm cache"
-                                cacheHome
-                                fixture
+                            void $ tryLoad "substitutions.composer_proxy.many_imports warm" $
+                                warmManyImportsCache
+                                    "composer_proxy.many_imports: warm cache"
+                                    cacheHome
+                                    fixture
                         _ ->
                             pure ()
 

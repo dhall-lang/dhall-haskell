@@ -8,6 +8,7 @@ module Bench.Common
     , ColdResolveBench (..)
     , say
     , timed
+    , tryLoad
     , patternFromArgs
     , couldMatch
     , phaseLabels
@@ -38,10 +39,19 @@ module Bench.Common
     , endToEndWarmBenchGroup
     ) where
 
-import Control.Exception (bracket, throw)
+import Control.Exception
+    ( SomeAsyncException
+    , SomeException
+    , bracket
+    , displayException
+    , fromException
+    , throw
+    , throwIO
+    , try
+    )
 import Data.Char (toLower)
 import Data.List (isInfixOf, isPrefixOf)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Data.Void (Void)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -85,9 +95,27 @@ timed label action = do
     say $ "  " <> label <> ": " <> formatDuration seconds
     pure result
 
+-- | Run a fixture load. A failure, including an import whose integrity hash
+-- does not match, is reported and skipped so the other benchmarks still run.
+-- Asynchronous exceptions are rethrown.
+tryLoad :: String -> IO a -> IO (Maybe a)
+tryLoad label action = do
+    result <- try action
+    case result of
+        Right value -> pure (Just value)
+        Left ex
+            | isAsync ex -> throwIO ex
+            | otherwise -> do
+                say $ "Skipping " <> label <> " (failed to load):"
+                say (displayException ex)
+                pure Nothing
+
+isAsync :: SomeException -> Bool
+isAsync ex = isJust (fromException ex :: Maybe SomeAsyncException)
+
 -- | Resolve imports using the normal semantic / semisemantic disk caches.
--- Used for fixture preparation (Mode A) so broken fixtures fail early and
--- typecheck/evaluation benches have a resolved AST. See ../README.md.
+-- Used for fixture preparation (Mode A). A fixture that fails here is skipped
+-- by 'tryLoad'; the other benchmarks still run. See ../README.md.
 resolveWithCache :: Dhall.InputSettings -> ParsedExpr -> IO ResolvedExpr
 resolveWithCache settings parsed =
     Import.loadWithStatus

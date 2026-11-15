@@ -14,7 +14,7 @@ import Data.Void (Void)
 import System.FilePath ((</>), takeDirectory)
 import Test.Tasty.Bench
 
-import Bench.Common (ResolvedExpr, couldMatch, ensureWellTyped, resolveWithCache, say, timed)
+import Bench.Common (ResolvedExpr, couldMatch, ensureWellTyped, resolveWithCache, say, timed, tryLoad)
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.Text as Text
@@ -97,11 +97,11 @@ dagoutBenchmarks mPattern
     | otherwise = do
         large1 <-
             if any (couldMatch mPattern) (dagoutRowLabels "dagout.large1")
-                then (:[]) <$> loadDagout "dagout.large1" loadLarge1
+                then maybe [] (:[]) <$> tryLoad "dagout.large1" (loadDagout "dagout.large1" loadLarge1)
                 else pure []
         k8s <-
             if any (couldMatch mPattern) (dagoutRowLabels "dagout.k8s.file3")
-                then (:[]) <$> loadDagout "dagout.k8s.file3" loadK8sFile3
+                then maybe [] (:[]) <$> tryLoad "dagout.k8s.file3" (loadDagout "dagout.k8s.file3" loadK8sFile3)
                 else pure []
         pure (large1 ++ k8s)
   where

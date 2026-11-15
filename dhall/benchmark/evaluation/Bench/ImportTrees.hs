@@ -9,6 +9,7 @@ import Control.Exception (throw, throwIO)
 import Control.Monad (when)
 import Control.Monad.Trans.State.Strict (evalStateT)
 import Data.List (isInfixOf, isSuffixOf, sort)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import System.FilePath ((</>), takeBaseName, takeDirectory)
 import Test.Tasty.Bench
@@ -157,7 +158,8 @@ loadExamples mPattern = do
             pure []
         else do
             say $ "Loading normalize fixtures (" <> show (length paths) <> " file(s))…"
-            traverse loadExample paths
+            fmap catMaybes $
+                mapM (\path -> tryLoad (takeBaseName path) (loadExample path)) paths
   where
     normalizeDirectory = "benchmark/evaluation/normalize"
 
@@ -203,7 +205,11 @@ loadLarge6PhaseVariants mPattern = do
             when (any (("slow_parse" `isInfixOf`) . fst) selected) $
                 ensureSlowParseDhall large6Directory
             say $ "Loading large6 fixtures (" <> show (length selected) <> " file(s))…"
-            traverse (\(label, file) -> loadPipelineBench label large6Directory file) selected
+            fmap catMaybes $
+                mapM
+                    (\(label, file) ->
+                        tryLoad label (loadPipelineBench label large6Directory file))
+                    selected
 
 -- | Always rewrite `slow/parse.dhall`. Nested block comments (~1.3M lines)
 -- give an artificial ~0.5s parse burden; the file evaluates to `True`.
@@ -251,7 +257,11 @@ loadLarge6ColdResolveVariants mPattern = do
             pure []
         else do
             say $ "Loading large6 cold-resolve fixtures (" <> show (length selected) <> " file(s))…"
-            traverse (\(label, file) -> loadColdResolveBench label large6Directory file) selected
+            fmap catMaybes $
+                mapM
+                    (\(label, file) ->
+                        tryLoad label (loadColdResolveBench label large6Directory file))
+                    selected
 
 -- | Load large1 inputs for the existing per-phase benchmarks.
 --
@@ -343,7 +353,8 @@ loadK8sExamples mPattern = do
             pure []
         else do
             say $ "Loading k8s fixtures (" <> show (length selected) <> " file(s))…"
-            traverse loadK8sExample selected
+            fmap catMaybes $
+                mapM (\entry@(name, _) -> tryLoad name (loadK8sExample entry)) selected
 
 
 parseLarge1 :: FilePath -> Text -> ParsedExpr
@@ -407,7 +418,7 @@ benchmarks mPattern = do
     let wantLarge1 = any (couldMatch mPattern) large1Labels
     large1 <-
         if wantLarge1
-            then Just <$> loadLarge1
+            then tryLoad "large1" loadLarge1
             else do
                 say "Skipping large1 (does not match pattern)"
                 pure Nothing
@@ -415,7 +426,7 @@ benchmarks mPattern = do
     let wantLarge2 = any (couldMatch mPattern) large2Labels
     large2 <-
         if wantLarge2
-            then Just <$> loadLarge2
+            then tryLoad "large2" loadLarge2
             else do
                 say "Skipping large2 (does not match pattern)"
                 pure Nothing
@@ -425,7 +436,7 @@ benchmarks mPattern = do
     let wantLarge3 = any (couldMatch mPattern) large3Labels
     large3 <-
         if wantLarge3
-            then Just <$> loadPipelineBench "large3" large3Directory "pipeline.dhall"
+            then tryLoad "large3" (loadPipelineBench "large3" large3Directory "pipeline.dhall")
             else do
                 say "Skipping large3 (does not match pattern)"
                 pure Nothing
@@ -434,8 +445,8 @@ benchmarks mPattern = do
     large3GetConfig <-
         if wantLarge3GetConfig
             then
-                Just
-                    <$> loadPipelineBench
+                tryLoad "large3.get_config" $
+                    loadPipelineBench
                         "large3.get_config"
                         large3Directory
                         "get_config.dhall"
@@ -446,7 +457,7 @@ benchmarks mPattern = do
     let wantLarge4 = any (couldMatch mPattern) large4Labels
     large4 <-
         if wantLarge4
-            then Just <$> loadPipelineBench "large4" large4Directory "generate-example.dhall"
+            then tryLoad "large4" (loadPipelineBench "large4" large4Directory "generate-example.dhall")
             else do
                 say "Skipping large4 (does not match pattern)"
                 pure Nothing
@@ -455,8 +466,8 @@ benchmarks mPattern = do
     large5Code <-
         if wantLarge5Code
             then
-                Just
-                    <$> loadPipelineBench
+                tryLoad "large5" $
+                    loadPipelineBench
                         "large5"
                         large5Directory
                         "pipeline-code.dhall"
@@ -470,7 +481,7 @@ benchmarks mPattern = do
     let wantLarge7 = any (couldMatch mPattern) large7Labels
     large7 <-
         if wantLarge7
-            then Just <$> loadLarge7
+            then tryLoad "large7" loadLarge7
             else do
                 say "Skipping large7 (does not match pattern)"
                 pure Nothing
@@ -479,8 +490,8 @@ benchmarks mPattern = do
     diamondImport <-
         if wantDiamondImport
             then
-                Just
-                    <$> loadColdResolveBench
+                tryLoad "diamond_import" $
+                    loadColdResolveBench
                         "diamond_import"
                         diamondImportDirectory
                         "main.dhall"
@@ -492,8 +503,8 @@ benchmarks mPattern = do
     diamondImportTransitive <-
         if wantDiamondImportTransitive
             then
-                Just
-                    <$> loadColdResolveBench
+                tryLoad "diamond_import_transitive" $
+                    loadColdResolveBench
                         "diamond_import_transitive"
                         diamondImportTransitiveDirectory
                         "main.dhall"
@@ -505,8 +516,8 @@ benchmarks mPattern = do
     preludeImportCode <-
         if wantPreludeImportCode
             then
-                Just
-                    <$> loadColdResolveBench
+                tryLoad "prelude_import" $
+                    loadColdResolveBench
                         "prelude_import"
                         preludeImportDirectory
                         "prelude-code.dhall"

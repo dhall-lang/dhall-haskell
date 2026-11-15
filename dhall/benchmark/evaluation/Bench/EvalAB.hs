@@ -15,6 +15,7 @@ module Bench.EvalAB
 import Control.Exception (throw, throwIO)
 import Data.Char (toLower)
 import Data.List (isInfixOf)
+import Data.Maybe (catMaybes)
 import Data.Void (Void)
 import Test.Tasty.Bench
 import Text.Printf (printf)
@@ -209,7 +210,8 @@ benchmarks mPattern = do
             pure []
         else do
             say $ "Loading evalab fixtures (" <> show (length selected) <> ")…"
-            loaded <- mapM loadSpec selected
+            loaded <- fmap catMaybes $
+                mapM (\spec -> tryLoad (specName spec) (loadSpec spec)) selected
             groups <- mapM (fixtureGroup mPattern) loaded
             pure [bgroup "evalab" groups]
 

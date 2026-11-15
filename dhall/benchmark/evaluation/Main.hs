@@ -22,9 +22,10 @@
 module Main where
 
 import System.Environment (getArgs)
-import Test.Tasty.Bench (defaultMain)
+import Test.Tasty.Bench (Benchmark, defaultMain)
 
-import Bench.Common (patternFromArgs, say)
+import Bench.Common (patternFromArgs, say, tryLoad)
+import Data.Maybe (fromMaybe)
 import qualified Bench.EvalAB as EvalAB
 import qualified Bench.GraphMetrics as GraphMetrics
 import qualified Bench.ImportOverhead as ImportOverhead
@@ -43,10 +44,10 @@ main = do
         Nothing  -> say "Preparing benchmarks (loading fixtures; prep cache on)…"
         Just pat -> say $ "Preparing benchmarks matching " <> show pat <> " (prep cache on)…"
 
-    importTreeBenches <- ImportTrees.benchmarks mPattern
-    graphMetricBenches <- GraphMetrics.benchmarks mPattern
-    evalABBenches <- EvalAB.benchmarks mPattern
-    microBenches <- Micro.benchmarks mPattern
+    importTreeBenches <- loadSuite "import trees" (ImportTrees.benchmarks mPattern)
+    graphMetricBenches <- loadSuite "graph metrics" (GraphMetrics.benchmarks mPattern)
+    evalABBenches <- loadSuite "evalab" (EvalAB.benchmarks mPattern)
+    microBenches <- loadSuite "micro" (Micro.benchmarks mPattern)
     -- many_files / composer_proxy fixtures live in temp dirs that must
     -- remain until tasty-bench finishes (the timed samples import those
     -- files). Substitutions.benchmarks holds that lifetime.
@@ -62,3 +63,7 @@ main = do
                 , substitutionBenches
                 , overheadBenches
                 ]
+
+-- | A suite that fails while loading is omitted. The other suites still run.
+loadSuite :: String -> IO [Benchmark] -> IO [Benchmark]
+loadSuite label action = fromMaybe [] <$> tryLoad label action
