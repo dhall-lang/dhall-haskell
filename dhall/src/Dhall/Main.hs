@@ -933,15 +933,10 @@ command (Options {..}) = do
                                         | otherwise ->
                                             return evaluated
 
-                    let alphaNormalizedExpression =
-                            if alpha
-                            then Dhall.Core.alphaNormalize normalizedExpression
-                            else normalizedExpression
-
                     let annotatedExpression =
                             if annotate
-                            then Annot alphaNormalizedExpression inferredType
-                            else alphaNormalizedExpression
+                            then Annot normalizedExpression inferredType
+                            else normalizedExpression
 
                     case output of
                         StandardOutput ->
@@ -952,11 +947,27 @@ command (Options {..}) = do
                                 (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
 
             let evalShared = do
-                    let (normalForm, quoteCut) =
-                            Dhall.Import.normalizeLoadedCapped
-                                maxOutputSize
-                                status
-                                sharedExpression
+                    (normalForm, quoteCut) <-
+                        case maxOutputSize of
+                            Nothing ->
+                                return
+                                    ( Dhall.Import.presentLoaded
+                                        status
+                                        alpha
+                                        sharedExpression
+                                    , False
+                                    )
+                            Just _ -> do
+                                let (quoted, cut) =
+                                        Dhall.Import.normalizeLoadedCapped
+                                            maxOutputSize
+                                            status
+                                            sharedExpression
+                                    finished =
+                                        if alpha
+                                        then Dhall.Core.alphaNormalize quoted
+                                        else quoted
+                                return (finished, cut)
                     forced <- Control.Exception.evaluate (force normalForm)
                     return (forced, quoteCut)
 
@@ -974,8 +985,9 @@ command (Options {..}) = do
                         (Nothing, Nothing) ->
                             return
                                 ( Right
-                                    ( Dhall.Import.normalizeLoaded
+                                    ( Dhall.Import.presentLoaded
                                         status
+                                        alpha
                                         sharedExpression
                                     , False
                                     )
@@ -1079,14 +1091,17 @@ command (Options {..}) = do
 
             _ <- Dhall.Core.throws (Dhall.TypeCheck.typeOf resolvedExpression)
 
-            let normalizedExpression = Dhall.Core.normalize resolvedExpression
+            let canonical = Dhall.Core.normalizeToGraph resolvedExpression
+                presented =
+                    Dhall.Core.renote
+                        ( Dhall.Core.presentationExpr
+                            ( if alpha
+                              then Dhall.Core.alphaCanonical canonical
+                              else canonical
+                            )
+                        )
 
-            let alphaNormalizedExpression =
-                    if alpha
-                    then Dhall.Core.alphaNormalize normalizedExpression
-                    else normalizedExpression
-
-            render System.IO.stdout characterSet alphaNormalizedExpression
+            render System.IO.stdout characterSet presented
 
         Cse {..} -> do
             (expression, characterSet) <- getExpressionAndCharacterSet file

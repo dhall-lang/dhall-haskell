@@ -115,6 +115,7 @@ module Dhall.Import (
     , normalizeLoaded
     , normalizeLoadedToGraph
     , normalizeLoadedForHash
+    , presentLoaded
     , normalizeLoadedCapped
     , localToPath
     , hashExpression
@@ -251,6 +252,7 @@ import Dhall.Parser
     , Src (..)
     )
 import Lens.Micro        (Lens', set, toListOf)
+import Prettyprinter     ()
 import Lens.Micro.Extras (view)
 
 import qualified Codec.CBOR.Write                            as Write
@@ -2638,6 +2640,21 @@ rebuildShared template sharedChildren =
 normalizeLoaded :: Status -> Expr s ImportRef -> Expr t Void
 normalizeLoaded status expression =
     Core.renote (dropImportRefs (quoteShared status expression))
+
+-- | Printed normal form of a shared import. Alpha-normalization, when
+-- requested, is applied to the canonical graph before common-subexpression
+-- elimination. The result is a compact expression, not the expanded normal
+-- form.
+presentLoaded :: Status -> Bool -> Expr s ImportRef -> Expr t Void
+presentLoaded status useAlpha expression =
+    Core.renote (NormalForm.presentationExpr canonical)
+  where
+    raw :: NormalForm.CanonicalGraph Void
+    raw = unsafeCoerce (normalizeLoadedToGraph status expression)
+    canonical =
+        if useAlpha
+        then NormalForm.alphaCanonical raw
+        else raw
 
 -- | Canonical graph for a shared import twin. Does not rebuild an 'Expr'.
 normalizeLoadedToGraph
