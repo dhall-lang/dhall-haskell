@@ -2706,6 +2706,15 @@ quoteBounded budget env0 val0 =
                     let v = snd (freshName env x)
                     (b', cut') <- child (Bind env x) (b v)
                     return (Pi mempty x a' b', cut')
+        -- The body was evaluated with this binder skipped. Quoting it under
+        -- Bind restores the index shift the syntax binder introduces.
+        VPiND x a t -> do
+            (a', cut) <- child env a
+            if cut
+                then return (Pi mempty x a' marker, True)
+                else do
+                    (b', cut') <- child (Bind env x) t
+                    return (Pi mempty x a' b', cut')
         VBool -> return (Bool, False)
         VBoolLit b -> return (BoolLit b, False)
         VBoolAnd t u -> both env t u BoolAnd
