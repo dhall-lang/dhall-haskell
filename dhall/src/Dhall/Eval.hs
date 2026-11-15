@@ -106,8 +106,12 @@ module Dhall.Eval (
   , timezoneShow
   ) where
 
-import Control.Monad      (foldM)
-import Control.Monad.ST   (ST, runST)
+import Control.Monad         (foldM)
+import Control.Monad.ST      (ST, runST)
+import Control.Monad.ST.Unsafe (unsafeIOToST)
+import Data.Hashable         (Hashable (..))
+import Data.STRef            (STRef, modifySTRef', newSTRef, readSTRef)
+import System.Mem.StableName (StableName, hashStableName, makeStableName)
 import GHC.Clock          (getMonotonicTimeNSec)
 import GHC.Float          (castDoubleToWord64)
 import Data.ByteString    (ByteString)
@@ -161,11 +165,9 @@ import Dhall.Eval.Run
     , freshValId
     , insertConvMemo
     , insertEvalMemo
-    , insertQuoteMemo
     , internBody
     , lookupConvMemo
     , lookupEvalMemo
-    , lookupQuoteMemo
     , readEvalStats
     , readEvalStatsIO
     , withEvalRun
@@ -1780,6 +1782,18 @@ countNames x = go 0
     go !acc EmptyNames         = acc
     go  acc (Bind env x') = go (if x == x' then acc + 1 else acc) env
 
+-- | Quote memo key: the value's heap identity plus the name-spine it is quoted
+-- under. The same thunk under two different binders is not the same node,
+-- because de Bruijn indices depend on that spine.
+data QuoteKey a = QuoteKey !(StableName (Val a)) !(StableName Names)
+
+instance Eq (QuoteKey a) where
+    QuoteKey v n == QuoteKey v' n' = v == v' && n == n'
+
+instance Hashable (QuoteKey a) where
+    hashWithSalt salt (QuoteKey v n) =
+        hashWithSalt (hashWithSalt salt (hashStableName v)) (hashStableName n)
+
 -- | Quote a value by interning 'Dhall.Core.DAG.CoreNode's, then rebuild a
 -- physically shared 'Expr'.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
@@ -1791,47 +1805,61 @@ quote env t0 = withEvalRun defaultEvalConfig $ runST $ do
 
 -- | Quote into an existing intern builder. Child nodes are interned before parents.
 quoteGraph :: forall s a. Eq a => DAG.Builder s a -> Names -> Val a -> ST s DAG.NodeId
-quoteGraph b = go
+quoteGraph b env0 val0 = do
+    ref <- newSTRef (HashMap.empty :: HashMap.HashMap (QuoteKey a) DAG.NodeId)
+    go ref env0 val0
   where
     internN = DAG.intern b
 
-    go :: Names -> Val a -> ST s DAG.NodeId
-    go !env !t0 =
-        case t0 of
-            Atomic _ ->
-                goUncached env t0
-            Identified vid closed _ ->
-                if closed then
-                    case lookupQuoteMemo vid of
-                        Just nid -> return nid
-                        Nothing -> do
-                            nid <- goUncached env t0
-                            return (insertQuoteMemo vid nid)
-                else
-                    goUncached env t0
+    -- Local to this quote. A shared thunk is interned once; later occurrences
+    -- reuse its NodeId. No ValId and no process-global memo.
+    go
+        :: STRef s (HashMap.HashMap (QuoteKey a) DAG.NodeId)
+        -> Names
+        -> Val a
+        -> ST s DAG.NodeId
+    -- Atoms are cheap to intern and rarely shared as thunks; skipping the
+    -- memo keeps the unique-literal path to one hash-cons lookup.
+    go ref !env !t0 = case t0 of
+        Atomic _ -> goUncached ref env t0
+        _ -> do
+            sn <- unsafeIOToST (makeStableName t0)
+            nsn <- unsafeIOToST (makeStableName env)
+            let key = QuoteKey sn nsn
+            seen <- readSTRef ref
+            case HashMap.lookup key seen of
+                Just nid -> return nid
+                Nothing -> do
+                    nid <- goUncached ref env t0
+                    modifySTRef' ref (HashMap.insert key nid)
+                    return nid
 
-    goUncached :: Names -> Val a -> ST s DAG.NodeId
-    goUncached !env !t0 =
+    goUncached
+        :: STRef s (HashMap.HashMap (QuoteKey a) DAG.NodeId)
+        -> Names
+        -> Val a
+        -> ST s DAG.NodeId
+    goUncached ref !env !t0 =
         case t0 of
             VConst k ->
                 internN (DAG.CConst k)
             VVar !x !i ->
                 internN (DAG.CVar (V x (countNames x env - i - 1)))
             VApp t u -> do
-                t' <- go env t
-                qApp env t' u
+                t' <- go ref env t
+                qApp ref env t' u
             VLam a (freshClosure env -> (x, v, t)) -> do
-                a' <- go env a
-                body <- go (Bind env x) (instantiate t v)
+                a' <- go ref env a
+                body <- go ref (Bind env x) (instantiate t v)
                 internN (DAG.CLam x a' body)
             VHLam i t ->
                 case i of
                     Typed (fresh env -> (x, v)) a -> do
-                        a' <- go env a
-                        body <- go (Bind env x) (t v)
+                        a' <- go ref env a
+                        body <- go ref (Bind env x) (t v)
                         internN (DAG.CLam x a' body)
                     Prim ->
-                        go env (t VPrimVar)
+                        go ref env (t VPrimVar)
                     NaturalSubtractZero -> do
                         f <- primitiveVar env "Natural/subtract"
                         z <- internN (DAG.CNaturalLit 0)
@@ -1844,36 +1872,36 @@ quoteGraph b = go
                         f <- primitiveVar env "Text/replace"
                         z <- internN (DAG.CTextLit [] "")
                         app <- internN (DAG.CApp f z)
-                        r <- go env replacement
+                        r <- go ref env replacement
                         internN (DAG.CApp app r)
             VPi a (freshClosure env -> (x, v, t)) -> do
-                a' <- go env a
-                body <- go (Bind env x) (instantiate t v)
+                a' <- go ref env a
+                body <- go ref (Bind env x) (instantiate t v)
                 internN (DAG.CPi x a' body)
             VHPi (fresh env -> (x, v)) a t -> do
-                a' <- go env a
-                body <- go (Bind env x) (t v)
+                a' <- go ref env a
+                body <- go ref (Bind env x) (t v)
                 internN (DAG.CPi x a' body)
             VPiND x a t -> do
-                a' <- go env a
-                body <- go (Bind env x) t
+                a' <- go ref env a
+                body <- go ref (Bind env x) t
                 internN (DAG.CPi x a' body)
             VBool ->
                 internN DAG.CBool
             VBoolLit x ->
                 internN (DAG.CBoolLit x)
             VBoolAnd t u ->
-                bin env DAG.CBoolAnd t u
+                bin ref env DAG.CBoolAnd t u
             VBoolOr t u ->
-                bin env DAG.CBoolOr t u
+                bin ref env DAG.CBoolOr t u
             VBoolEQ t u ->
-                bin env DAG.CBoolEQ t u
+                bin ref env DAG.CBoolEQ t u
             VBoolNE t u ->
-                bin env DAG.CBoolNE t u
+                bin ref env DAG.CBoolNE t u
             VBoolIf t u v -> do
-                t' <- go env t
-                u' <- go env u
-                v' <- go env v
+                t' <- go ref env t
+                u' <- go ref env u
+                v' <- go ref env v
                 internN (DAG.CBoolIf t' u' v')
             VBytes ->
                 internN DAG.CBytes
@@ -1884,159 +1912,159 @@ quoteGraph b = go
             VNaturalLit n ->
                 internN (DAG.CNaturalLit n)
             VNaturalFold a t u v ->
-                primApps env "Natural/fold" [a, t, u, v]
+                primApps ref env "Natural/fold" [a, t, u, v]
             VNaturalBuild t ->
-                primApps env "Natural/build" [t]
+                primApps ref env "Natural/build" [t]
             VNaturalIsZero t ->
-                primApps env "Natural/isZero" [t]
+                primApps ref env "Natural/isZero" [t]
             VNaturalEven t ->
-                primApps env "Natural/even" [t]
+                primApps ref env "Natural/even" [t]
             VNaturalOdd t ->
-                primApps env "Natural/odd" [t]
+                primApps ref env "Natural/odd" [t]
             VNaturalToInteger t ->
-                primApps env "Natural/toInteger" [t]
+                primApps ref env "Natural/toInteger" [t]
             VNaturalShow t ->
-                primApps env "Natural/show" [t]
+                primApps ref env "Natural/show" [t]
             VNaturalPlus t u ->
-                bin env DAG.CNaturalPlus t u
+                bin ref env DAG.CNaturalPlus t u
             VNaturalTimes t u ->
-                bin env DAG.CNaturalTimes t u
+                bin ref env DAG.CNaturalTimes t u
             VNaturalSubtract x y ->
-                primApps env "Natural/subtract" [x, y]
+                primApps ref env "Natural/subtract" [x, y]
             VInteger ->
                 internN DAG.CInteger
             VIntegerLit n ->
                 internN (DAG.CIntegerLit n)
             VIntegerClamp t ->
-                primApps env "Integer/clamp" [t]
+                primApps ref env "Integer/clamp" [t]
             VIntegerNegate t ->
-                primApps env "Integer/negate" [t]
+                primApps ref env "Integer/negate" [t]
             VIntegerShow t ->
-                primApps env "Integer/show" [t]
+                primApps ref env "Integer/show" [t]
             VIntegerToDouble t ->
-                primApps env "Integer/toDouble" [t]
+                primApps ref env "Integer/toDouble" [t]
             VDouble ->
                 internN DAG.CDouble
             VDoubleLit n ->
                 internN (DAG.CDoubleLit n)
             VDoubleShow t ->
-                primApps env "Double/show" [t]
+                primApps ref env "Double/show" [t]
             VText ->
                 internN DAG.CText
             VTextLit (VChunks xys z) -> do
-                chunks <- for xys $ \(t, e) -> (,) t <$> go env e
+                chunks <- for xys $ \(t, e) -> (,) t <$> go ref env e
                 internN (DAG.CTextLit chunks z)
             VTextAppend t u ->
-                bin env DAG.CTextAppend t u
+                bin ref env DAG.CTextAppend t u
             VTextShow t ->
-                primApps env "Text/show" [t]
+                primApps ref env "Text/show" [t]
             VTextReplace a c d ->
-                primApps env "Text/replace" [a, c, d]
+                primApps ref env "Text/replace" [a, c, d]
             VDate ->
                 internN DAG.CDate
             VDateLiteral d ->
                 internN (DAG.CDateLiteral d)
             VDateShow t ->
-                primApps env "Date/show" [t]
+                primApps ref env "Date/show" [t]
             VTime ->
                 internN DAG.CTime
             VTimeLiteral hh mm ss frac p ->
                 internN (DAG.CTimeLiteral hh mm ss frac p)
             VTimeShow t ->
-                primApps env "Time/show" [t]
+                primApps ref env "Time/show" [t]
             VTimeZone ->
                 internN DAG.CTimeZone
             VTimeZoneLiteral z ->
                 internN (DAG.CTimeZoneLiteral z)
             VTimeZoneShow t ->
-                primApps env "TimeZone/show" [t]
+                primApps ref env "TimeZone/show" [t]
             VList t -> do
                 list <- internN DAG.CList
-                qApp env list t
+                qApp ref env list t
             VListLit ma ts -> do
-                ma' <- traverse (go env) ma
-                ts' <- traverse (go env) (toList ts)
+                ma' <- traverse (go ref env) ma
+                ts' <- traverse (go ref env) (toList ts)
                 internN (DAG.CListLit ma' ts')
             VListAppend t u ->
-                bin env DAG.CListAppend t u
+                bin ref env DAG.CListAppend t u
             VListBuild a t ->
-                primApps env "List/build" [a, t]
+                primApps ref env "List/build" [a, t]
             VListFold a l t u v ->
-                primApps env "List/fold" [a, l, t, u, v]
+                primApps ref env "List/fold" [a, l, t, u, v]
             VListLength a t ->
-                primApps env "List/length" [a, t]
+                primApps ref env "List/length" [a, t]
             VListHead a t ->
-                primApps env "List/head" [a, t]
+                primApps ref env "List/head" [a, t]
             VListLast a t ->
-                primApps env "List/last" [a, t]
+                primApps ref env "List/last" [a, t]
             VListIndexed a t ->
-                primApps env "List/indexed" [a, t]
+                primApps ref env "List/indexed" [a, t]
             VListReverse a t ->
-                primApps env "List/reverse" [a, t]
+                primApps ref env "List/reverse" [a, t]
             VOptional a -> do
                 opt <- internN DAG.COptional
-                qApp env opt a
+                qApp ref env opt a
             VSome t ->
-                go env t >>= internN . DAG.CSome
+                go ref env t >>= internN . DAG.CSome
             VNone t -> do
                 none <- internN DAG.CNone
-                qApp env none t
+                qApp ref env none t
             VRecord m -> do
-                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go env v
+                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go ref env v
                 internN (DAG.CRecord kvs)
             VRecordLit m -> do
-                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go env v
+                kvs <- for (Map.toList m) $ \(k, v) -> (,) k <$> go ref env v
                 internN (DAG.CRecordLit kvs)
             VUnion m -> do
-                kvs <- for (Map.toList m) $ \(k, mv) -> (,) k <$> traverse (go env) mv
+                kvs <- for (Map.toList m) $ \(k, mv) -> (,) k <$> traverse (go ref env) mv
                 internN (DAG.CUnion kvs)
             VCombine mk t u -> do
-                t' <- go env t
-                u' <- go env u
+                t' <- go ref env t
+                u' <- go ref env u
                 internN (DAG.CCombine mk t' u')
             VCombineTypes t u ->
-                bin env DAG.CCombineTypes t u
+                bin ref env DAG.CCombineTypes t u
             VPrefer t u -> do
-                t' <- go env t
-                u' <- go env u
+                t' <- go ref env t
+                u' <- go ref env u
                 internN (DAG.CPrefer PreferFromSource t' u')
             VMerge t u ma -> do
-                t' <- go env t
-                u' <- go env u
-                ma' <- traverse (go env) ma
+                t' <- go ref env t
+                u' <- go ref env u
+                ma' <- traverse (go ref env) ma
                 internN (DAG.CMerge t' u' ma')
             VToMap t ma -> do
-                t' <- go env t
-                ma' <- traverse (go env) ma
+                t' <- go ref env t
+                ma' <- traverse (go ref env) ma
                 internN (DAG.CToMap t' ma')
             VShowConstructor t ->
-                go env t >>= internN . DAG.CShowConstructor
+                go ref env t >>= internN . DAG.CShowConstructor
             VField t k -> do
-                t' <- go env t
+                t' <- go ref env t
                 internN (DAG.CField t' k)
             VProject t p -> do
-                t' <- go env t
+                t' <- go ref env t
                 p' <- case p of
                     Left ks -> return (Left (Dhall.Set.toList ks))
-                    Right e -> Right <$> go env e
+                    Right e -> Right <$> go ref env e
                 internN (DAG.CProject t' p')
             VAssert t ->
-                go env t >>= internN . DAG.CAssert
+                go ref env t >>= internN . DAG.CAssert
             VEquivalent t u ->
-                bin env DAG.CEquivalent t u
+                bin ref env DAG.CEquivalent t u
             VWith e ks v -> do
-                e' <- go env e
-                v' <- go env v
+                e' <- go ref env e
+                v' <- go ref env v
                 internN (DAG.CWith e' ks v')
             VInject m k Nothing -> do
-                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go env) mv
+                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go ref env) mv
                 union <- internN (DAG.CUnion kvs)
                 internN (DAG.CField union k)
             VInject m k (Just t) -> do
-                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go env) mv
+                kvs <- for (Map.toList m) $ \(l, mv) -> (,) l <$> traverse (go ref env) mv
                 union <- internN (DAG.CUnion kvs)
                 field <- internN (DAG.CField union k)
-                qApp env field t
+                qApp ref env field t
             VEmbed a ->
                 internN (DAG.CEmbed a)
             VPrimVar ->
@@ -2050,32 +2078,43 @@ quoteGraph b = go
     freshClosure env closure@(Closure x _ _ _) = (x, snd (fresh env x), closure)
     {-# INLINE freshClosure #-}
 
-    qApp :: Names -> DAG.NodeId -> Val a -> ST s DAG.NodeId
-    qApp _ t VPrimVar = return t
-    qApp env t u = do
-        u' <- go env u
+    qApp
+        :: STRef s (HashMap.HashMap (QuoteKey a) DAG.NodeId)
+        -> Names
+        -> DAG.NodeId
+        -> Val a
+        -> ST s DAG.NodeId
+    qApp _ _ t VPrimVar = return t
+    qApp ref env t u = do
+        u' <- go ref env u
         internN (DAG.CApp t u')
     {-# INLINE qApp #-}
 
     bin
-        :: Names
+        :: STRef s (HashMap.HashMap (QuoteKey a) DAG.NodeId)
+        -> Names
         -> (DAG.NodeId -> DAG.NodeId -> DAG.CoreNode a)
         -> Val a
         -> Val a
         -> ST s DAG.NodeId
-    bin env cons t u = do
-        t' <- go env t
-        u' <- go env u
+    bin ref env cons t u = do
+        t' <- go ref env t
+        u' <- go ref env u
         internN (cons t' u')
 
     primitiveVar :: Names -> Text -> ST s DAG.NodeId
     primitiveVar env name =
         internN (DAG.CVar (V name (countNames name env)))
 
-    primApps :: Names -> Text -> [Val a] -> ST s DAG.NodeId
-    primApps env name args = do
+    primApps
+        :: STRef s (HashMap.HashMap (QuoteKey a) DAG.NodeId)
+        -> Names
+        -> Text
+        -> [Val a]
+        -> ST s DAG.NodeId
+    primApps ref env name args = do
         f0 <- primitiveVar env name
-        foldM (\f arg -> qApp env f arg) f0 args
+        foldM (\f arg -> qApp ref env f arg) f0 args
 
 
 -- | Predefined functions implemented as ordinary variables with known names.
