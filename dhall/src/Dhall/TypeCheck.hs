@@ -78,6 +78,8 @@ import Dhall.Core.DAG
     ( NodeId (..)
     )
 import Dhall.Core.NormalForm (CanonicalGraph (..))
+import qualified Dhall.Core.NormalForm as NormalForm
+import qualified Dhall.Bounded as Bounded
 import Dhall.Eval.Run
     ( EnvId (..)
     , InferKey (..)
@@ -325,9 +327,10 @@ typeWithContext
 typeWithContext (TypingContext ctx) expression =
     fmap (Dhall.Core.renote . Eval.quote EmptyNames) (infer absurd ctx expression)
 
--- | Like 'typeWithContext', but stop quoting the inferred type once the
---   estimated rendered size reaches @budget@ bytes.  The 'Bool' is 'True'
---   when quoting was cut short.
+-- | Like 'typeWithContext', but the type is the CSE presentation.  The 'Bool'
+--   is 'True' when the default rendering of that presentation exceeds
+--   @budget@ bytes.  Callers that render with another layout should apply
+--   their own limit to the text.
 typeWithContextBounded
     :: Int
     -> TypingContext s
@@ -335,8 +338,19 @@ typeWithContextBounded
     -> Either (TypeError s X) (Expr s X, Bool)
 typeWithContextBounded budget (TypingContext ctx) expression = do
     typeVal <- infer absurd ctx expression
-    let (quoted, cut) = Eval.quoteBounded budget Eval.EmptyNames typeVal
-    return (Dhall.Core.renote quoted, cut)
+    let presented =
+            Dhall.Core.renote
+                ( NormalForm.presentationExpr
+                    ( CanonicalGraph (quoteToGraph EmptyNames typeVal) )
+                )
+    return (presented, presentationExceeds budget presented)
+
+-- | 'True' when the default rendering of an expression exceeds @budget@.
+presentationExceeds :: Pretty a => Int -> Expr s a -> Bool
+presentationExceeds budget expr =
+    case Bounded.prettyBounded budget (pretty expr) of
+        Bounded.Truncated _ -> True
+        Bounded.Complete _ -> False
 
 -- | Normalize an expression using values already stored in the context.
 --
@@ -349,24 +363,28 @@ normalizeWithContext (TypingContext ctx) expression =
   where
     env = values ctx
 
--- | Like 'normalizeWithContext', but stop quoting once the estimated rendered
---   size reaches @budget@ bytes.  The 'Bool' is 'True' when quoting was cut
---   short.  Parts that were not quoted are not forced.
+-- | Like 'normalizeWithContext', but the result is the CSE presentation.  The
+--   'Bool' is 'True' when the default rendering exceeds @budget@ bytes.
 normalizeWithContextBounded
     :: Int
     -> TypingContext s
     -> Expr t X
     -> (Expr u X, Bool)
 normalizeWithContextBounded budget (TypingContext ctx) expression =
-    (Dhall.Core.renote quoted, cut)
+    (presented, presentationExceeds budget presented)
   where
     env = values ctx
 
-    (quoted, cut) =
-        Eval.quoteBounded
-            budget
-            (Eval.envNames env)
-            (Eval.eval env (Dhall.Core.denote expression))
+    presented =
+        Dhall.Core.renote
+            ( NormalForm.presentationExpr
+                ( CanonicalGraph
+                    ( quoteToGraph
+                        (Eval.envNames env)
+                        (Eval.eval env (Dhall.Core.denote expression))
+                    )
+                )
+            )
 
 contextToCtx :: Eq a => Context (Expr s a) -> Ctx a
 contextToCtx context = loop (Dhall.Context.toList context)

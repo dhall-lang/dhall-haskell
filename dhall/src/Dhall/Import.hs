@@ -252,7 +252,8 @@ import Dhall.Parser
     , Src (..)
     )
 import Lens.Micro        (Lens', set, toListOf)
-import Prettyprinter     ()
+import qualified Dhall.Bounded                           as Bounded
+import qualified Prettyprinter                           as Pretty
 import Lens.Micro.Extras (view)
 
 import qualified Codec.CBOR.Write                            as Write
@@ -2668,25 +2669,23 @@ normalizeLoadedToGraph status expression =
   where
     env = sharedEnvironment status
 
--- | 'normalizeLoaded', or the same evaluation with quoting stopped after
---   @budget@ bytes.  'Nothing' quotes the whole normal form and the 'Bool' is
---   'False'.
+-- | Presentation of a shared import.  The 'Bool' is 'True' when the default
+--   rendering exceeds the budget.  'Nothing' does not apply a budget.
 normalizeLoadedCapped
     :: Maybe Int
     -> Status
     -> Expr s ImportRef
     -> (Expr t Void, Bool)
 normalizeLoadedCapped Nothing status expression =
-    (normalizeLoaded status expression, False)
+    (presentLoaded status False expression, False)
 normalizeLoadedCapped (Just nbytes) status expression =
-    (Core.renote (dropImportRefs quoted), cut)
+    (presented, exceeds)
   where
-    env = sharedEnvironment status
-    (quoted, cut) =
-        Eval.quoteBounded
-            nbytes
-            (Eval.envNames env)
-            (Eval.eval env (Core.denote expression))
+    presented = presentLoaded status False expression
+    exceeds =
+        case Bounded.prettyBounded nbytes (Pretty.pretty presented) of
+            Bounded.Truncated _ -> True
+            Bounded.Complete _ -> False
 
 quoteShared :: Status -> Expr s ImportRef -> Expr Void ImportRef
 quoteShared status expression =

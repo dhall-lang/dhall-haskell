@@ -67,7 +67,6 @@ import Dhall.Schemas       (Schemas (..))
 import Dhall.TypeCheck     (Censored (..), DetailedTypeError (..), TypeError)
 import Dhall.Version       (dhallVersionString)
 import Lens.Micro          (set)
-import Lens.Micro.Extras   (view)
 import Options.Applicative (Parser, ParserInfo)
 import Prettyprinter       (Doc, Pretty)
 import GHC.Show            (showLitChar)
@@ -947,29 +946,13 @@ command (Options {..}) = do
                                 (Dhall.Pretty.prettyCharacterSet characterSet annotatedExpression)
 
             let evalShared = do
-                    (normalForm, quoteCut) <-
-                        case maxOutputSize of
-                            Nothing ->
-                                return
-                                    ( Dhall.Import.presentLoaded
-                                        status
-                                        alpha
-                                        sharedExpression
-                                    , False
-                                    )
-                            Just _ -> do
-                                let (quoted, cut) =
-                                        Dhall.Import.normalizeLoadedCapped
-                                            maxOutputSize
-                                            status
-                                            sharedExpression
-                                    finished =
-                                        if alpha
-                                        then Dhall.Core.alphaNormalize quoted
-                                        else quoted
-                                return (finished, cut)
-                    forced <- Control.Exception.evaluate (force normalForm)
-                    return (forced, quoteCut)
+                    let presented =
+                            Dhall.Import.presentLoaded
+                                status
+                                alpha
+                                sharedExpression
+                    forced <- Control.Exception.evaluate (force presented)
+                    return (forced, False)
 
             case maxEvaluationTime of
                 Nothing -> do
@@ -1133,34 +1116,16 @@ command (Options {..}) = do
                         "Error: evaluation exceeded --max-evaluation-time"
                     Exit.exitFailure
 
-                inferType = case maxOutputSize of
-                    Nothing -> do
-                        inferredType <-
-                            Dhall.Core.throws
-                                =<< State.evalStateT
-                                    (Dhall.Import.typecheckLoaded
-                                        expression
-                                        resolvedExpression
-                                    )
-                                    status
-                        return (inferredType, False)
-                    Just nbytes -> do
-                        checked <-
-                            State.evalStateT
-                                (Dhall.Import.typecheckWithAlreadyCheckedImports
-                                    (view Dhall.Import.startingContext status)
+                inferType = do
+                    inferredType <-
+                        Dhall.Core.throws
+                            =<< State.evalStateT
+                                (Dhall.Import.typecheckLoaded
                                     expression
+                                    resolvedExpression
                                 )
                                 status
-                        case checked of
-                            Just (Right inferredType) ->
-                                return (inferredType, False)
-                            _ ->
-                                Dhall.Core.throws
-                                    (Dhall.TypeCheck.typeWithContextBounded
-                                        nbytes
-                                        Dhall.TypeCheck.emptyTypingContext
-                                        resolvedExpression)
+                    return (inferredType, False)
 
                 printType (inferredType, quoteCut) = case maxOutputSize of
                     Nothing ->

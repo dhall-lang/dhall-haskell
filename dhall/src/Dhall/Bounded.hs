@@ -2,12 +2,9 @@
 
     The three limits combine freely; each one that is omitted is not applied.
 
-    @--max-output-size@ does two things.  Quoting spends that many bytes,
-    charging each syntax node for the text it will print (a little syntax,
-    plus the length of names and literals), and stops once the estimate is
-    used up.  Rendering then keeps at most that many bytes of the real
-    layout and ends a truncated form with @…@.  Quoting does not measure
-    indentation, so the render step is what enforces the exact cap.
+    @--max-output-size@ limits the rendered presentation.  Normalization
+    builds the CSE-reduced form, and rendering keeps at most that many
+    bytes of the real layout, ending a truncated form with @…@.
 
     @--max-allocation@ and @--max-evaluation-time@ are separate.  They abort
     the work with no partial normal form.
@@ -60,7 +57,7 @@ import Prettyprinter (Doc)
 
 import qualified Data.Text as Text
 import qualified Dhall.Core as Core
-import qualified Dhall.Eval as Eval
+import qualified Dhall.Core.NormalForm as NormalForm
 import qualified Prettyprinter as Pretty
 
 -- | Whether a rendered document fit in the output budget.
@@ -77,29 +74,28 @@ data WorkLimit
 
 -- | Normalize @expression@ on the current thread.
 --
---   When output bytes are given, quoting stops once its estimate of rendered
---   text reaches that size; the 'Bool' is 'True' when quoting was cut short.
---   Without output bytes given, the result is an ordinary normal form and the
---   'Bool' is 'False'.  This does not apply an allocation or time limit.
+--   The expression is the CSE presentation.  When output bytes are given, the
+--   'Bool' is 'True' when rendering that presentation exceeds the budget.
+--   This does not apply an allocation or time limit.
 normalizeCapped
-    :: forall a s t. (Eq a, NFData a)
+    :: forall a s t. (Eq a, NFData a, Pretty.Pretty a)
     => Maybe Int
     -> Expr s a
     -> IO (Expr t a, Bool)
-normalizeCapped outputBytes expression =
+normalizeCapped outputBytes expression = do
+    let presented :: Expr Void a
+        presented =
+            NormalForm.presentationExpr (NormalForm.normalizeToGraph expression)
+    forced <- evaluate (force presented)
+    let renoted = Core.renote forced
     case outputBytes of
-        Nothing -> do
-            let normalForm :: Expr Void a
-                normalForm = Core.normalize expression
-            forced <- evaluate (force normalForm)
-            return (Core.renote forced, False)
-        Just nbytes -> do
-            let denoted = Core.denote expression
-                value = Eval.eval Eval.Empty denoted
-                (quoted, cut) =
-                    Eval.quoteBounded nbytes Eval.EmptyNames value
-            forced <- evaluate (force quoted)
-            return (Core.renote forced, cut)
+        Nothing -> return (renoted, False)
+        Just nbytes -> return (renoted, exceeds nbytes renoted)
+  where
+    exceeds nbytes presented =
+        case prettyBounded nbytes (Pretty.pretty presented) of
+            Truncated _ -> True
+            Complete _ -> False
 
 -- | Enable the allocation limit for one action on the current thread.
 --
@@ -125,7 +121,7 @@ withAllocationLimit (Just bytes) action
 --   limit applies only to this call; the CLI also wraps type-checking and
 --   rendering in 'runLimited' so @--max-evaluation-time@ covers them too.
 normalizeLimited
-    :: (Eq a, NFData a)
+    :: (Eq a, NFData a, Pretty.Pretty a)
     => Maybe Int64
     -> Maybe Int
     -> Maybe Int

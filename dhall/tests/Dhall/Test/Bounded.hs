@@ -119,7 +119,7 @@ timeLimitInterruptsPureWork = testCase "time limit interrupts pure work" $ do
         go i acc = go (i - 1) (acc + length (show i))
 
 outputBudgetStopsQuoting :: TestTree
-outputBudgetStopsQuoting = testCase "output bytes stop quoting a large record early" $ do
+outputBudgetStopsQuoting = testCase "output bytes bound the rendered presentation" $ do
     let fields =
             Text.intercalate ", "
                 [ "f" <> Text.pack (show i) <> " = " <> Text.pack (show i) | i <- [1 .. 80 :: Int] ]
@@ -131,16 +131,23 @@ outputBudgetStopsQuoting = testCase "output bytes stop quoting a large record ea
         :: IO (Either Bounded.WorkLimit (Core.Expr Parser.Src Core.Import, Bool))
     case quoted of
         Left reason -> assertFailure (show reason)
-        Right (_, False) -> assertFailure "expected quoting to stop"
-        Right (partial, True) -> do
-            let doc = Pretty.prettyCharacterSet Pretty.ASCII partial
+        Right (_, False) -> assertFailure "expected the presentation to exceed 80 bytes"
+        Right (presented, True) -> do
+            let doc = Pretty.prettyCharacterSet Pretty.ASCII presented
+            case Bounded.prettyBounded 80 doc of
+                Truncated text ->
+                    assertBool
+                        ("truncated rendering is longer than the budget: " <> show (Text.length text))
+                        (Text.length text <= 80)
+                Complete text ->
+                    assertFailure ("expected truncation, got " <> Text.unpack text)
             case Bounded.prettyBounded (maxBound :: Int) doc of
                 Complete text ->
                     assertBool
-                        ("quoted form is still too large: " <> show (Text.length text))
-                        (Text.length text < 400)
+                        "presentation should be larger than the budget"
+                        (Text.length text > 80)
                 Truncated text ->
-                    assertFailure ("prettyBounded unexpectedly truncated " <> Text.unpack text)
+                    assertFailure ("full rendering was truncated: " <> Text.unpack text)
 
 truncatedRenderingEndsWithEllipsis :: TestTree
 truncatedRenderingEndsWithEllipsis = testCase "truncation ends with an ellipsis" $ do
