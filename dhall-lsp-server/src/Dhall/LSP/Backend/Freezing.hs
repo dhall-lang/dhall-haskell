@@ -111,7 +111,7 @@ hashCachedSingleImport settings fileid cache expr =
                         (view Dhall.normalizer settings)
                         imp
                         semantics
-                return (Just (Import.hashExpressionToCode normal))
+                return (Just (Import.hashCanonicalToCode normal))
 
 hashVoidSemantics :: EvaluateSettings -> Expr Void Void -> Text
 hashVoidSemantics settings sem =

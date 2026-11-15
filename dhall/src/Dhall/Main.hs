@@ -1284,12 +1284,9 @@ command (Options {..}) = do
                                             )
                                             status
                                 return
-                                    ( Dhall.Core.alphaNormalize
-                                        ( Dhall.Import.normalizeLoaded
-                                            status
-                                            sharedExpression
-                                        )
-                                    )
+                                    (Dhall.Import.normalizeLoadedForHash
+                                        status
+                                        sharedExpression)
                     Nothing -> do
                         _ <-
                             Dhall.Core.throws
@@ -1300,18 +1297,15 @@ command (Options {..}) = do
                                     )
                                     status
                         return
-                            ( Dhall.Core.alphaNormalize
-                                ( Dhall.Import.normalizeLoaded
-                                    status
-                                    sharedExpression
-                                )
-                            )
+                            (Dhall.Import.normalizeLoadedForHash
+                                status
+                                sharedExpression)
 
             if cache
-                then Dhall.Import.writeExpressionToSemanticCache normalizedExpression
+                then Dhall.Import.writeGraphToSemanticCache normalizedExpression
                 else return ()
 
-            Data.Text.IO.putStrLn (Dhall.Import.hashExpressionToCode normalizedExpression)
+            Data.Text.IO.putStrLn (Dhall.Import.hashCanonicalToCode normalizedExpression)
 
         Lint { transitivity = transitivity0, ..} -> do
             when deprecatedInPlace $

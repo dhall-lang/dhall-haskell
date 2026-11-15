@@ -61,6 +61,7 @@ import qualified Control.Monad.Trans.State.Strict   as State
 import qualified Data.Text.IO                       as Text.IO
 import qualified Dhall
 import qualified Dhall.Core                         as Core
+import qualified Dhall.Core.NormalForm              as NormalForm
 import qualified Dhall.Import
 import qualified Dhall.Pretty
 import qualified Dhall.TypeCheck
@@ -243,15 +244,17 @@ freezeImportWithSettings settings directory import_ = do
                     customNormalizer
                     unprotectedImport
                     importSemantics
-            Nothing ->
-                integrityHashFallback customNormalizer expression
+            Nothing -> do
+                fallback <- integrityHashFallback customNormalizer expression
+                pure (NormalForm.CanonicalGraph (Core.fromExpr fallback))
 
-    -- The semantic cache product is the encoded αβ-normal form.  Unhashed
-    -- Code imports are no longer β-normalized by `loadWith`, so we must
-    -- write `normalizedExpression` rather than the raw load product.
-    Dhall.Import.writeExpressionToSemanticCache normalizedExpression
+    -- The semantic cache product is the canonical DAG. Unhashed Code imports
+    -- are no longer β-normalized by `loadWith`, so we write this graph.
+    Dhall.Import.writeGraphToSemanticCache normalizedExpression
 
-    let expressionHash = Dhall.Import.hashExpression normalizedExpression
+    let expressionHash =
+            Core.hashExpressionGraph
+                (NormalForm.getCanonicalGraph normalizedExpression)
 
     let newImportHashed = (importHashed import_) { hash = Just expressionHash }
 

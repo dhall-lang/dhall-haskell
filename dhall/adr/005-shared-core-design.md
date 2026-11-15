@@ -733,7 +733,13 @@ Targets were `normalize` and typecheck at most 1.10× `main`, and `k8s` and `lar
 
 ### Hash and CBOR
 
-`fromExpr` has no pointer memo, and `hashGraphLegacy` encodes `toSharedExpr`, so it walks the expanded tree. A smaller encoding with a slower hash is not a reason to make DAG-CBOR the default. Phase 8 stays off.
+The measurements in this section kept DAG CBOR experimental. The normal-form
+migration after them makes canonical DAG CBOR the semantic hash and the
+semantic-cache format anyway. `hashGraphLegacy` remains only so a test can
+show that the new hash is not the old tree hash. The tables below are the
+old comparison, not the current default.
+
+`fromExpr` has no pointer memo, and `hashGraphLegacy` encodes `toSharedExpr`, so it walks the expanded tree. A smaller encoding with a slower hash was not, by itself, a reason to switch. The migration switches because the expanded normal form is the thing being removed.
 
 Repeated `x + x` tree, depth 20 (21 unique nodes, 6,291,453 tree bytes, 117 graph bytes):
 
@@ -762,5 +768,5 @@ Normalized `k8s.file3` (330 unique nodes, 39,827 tree bytes, 9,689 graph bytes):
 | `cbor_tree` | 278 μs | 1.7 MB |
 | `cbor_graph` | 894 μs | 3.0 MB |
 
-The graph encoding is smaller in every case (about 54,000× on the synthetic tree, 41× on `large1`, 4× on `k8s.file3`). Building the graph and hashing it is slower than hashing the tree, because interning walks expanded constructors and the legacy hash expands the graph again. DAG-CBOR stays experimental.
+The graph encoding is smaller in every case (about 54,000× on the synthetic tree, 41× on `large1`, 4× on `k8s.file3`). Building the graph and hashing it was slower than hashing the tree, because interning walks expanded constructors and the legacy hash expands the graph again. Canonical DAG CBOR is now the hash and the cache encoding despite that cost.
 

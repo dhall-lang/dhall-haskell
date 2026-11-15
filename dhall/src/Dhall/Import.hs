@@ -114,12 +114,15 @@ module Dhall.Import (
     , loadCollectingShared
     , normalizeLoaded
     , normalizeLoadedToGraph
+    , normalizeLoadedForHash
     , normalizeLoadedCapped
     , localToPath
     , hashExpression
     , hashExpressionGraph
     , hashExpressionToCode
+    , hashCanonicalToCode
     , writeExpressionToSemanticCache
+    , writeGraphToSemanticCache
     , assertNoImports
     , Manager
     , defaultNewManager
@@ -268,6 +271,8 @@ import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Core.DAG                              as DAG
+import qualified Dhall.Core.DAG.CBOR                         as DAGCBOR
 import qualified Dhall.Core.NormalForm                      as NormalForm
 import qualified Dhall.Eval                                  as Eval
 import qualified Dhall.Map
@@ -958,11 +963,11 @@ loadImportWithSemanticCache
 
             if semanticHash == actualHash
                 then do
-                    let bytesLazy = Data.ByteString.Lazy.fromStrict bytesStrict
-
-                    importSemantics <- case Dhall.Binary.decodeExpression bytesLazy of
-                        Left  err -> throwMissingImport (Imported _stack err)
-                        Right e   -> return e
+                    importSemantics <- case DAGCBOR.decodeGraph bytesStrict of
+                        Left err ->
+                            throwMissingImport (Imported _stack (Exception.ErrorCall err))
+                        Right g ->
+                            return (DAG.toSharedExpr g)
 
                     return
                         ( LoadOk ImportSemantics
@@ -1003,7 +1008,7 @@ loadImportWithSemanticCache
                         else return (LoadOk sem0')
         finishHashed importSemantics = do
             Status{ _reportWarning } <- State.get
-            let bytes = encodeExpression (Core.alphaNormalize importSemantics)
+            let bytes = encodedAlphaGraph importSemantics
 
             let actualHash = Dhall.Crypto.sha256Hash bytes
 
@@ -1040,19 +1045,25 @@ fetchFromSemanticCache
     => (Text -> IO ()) -> Dhall.Crypto.SHA256Digest
     -> m (Maybe Data.ByteString.ByteString)
 fetchFromSemanticCache report expectedHash = Maybe.runMaybeT $ do
-    cacheFile <- getCacheFile report "dhall" expectedHash
+    cacheFile <- getCacheFile report semanticCacheDirectory expectedHash
     True <- liftIO (Directory.doesFileExist cacheFile)
     liftIO (Data.ByteString.readFile cacheFile)
 
 -- | Ensure that the given expression is present in the semantic cache. The
 --   given expression should be alpha-beta-normal.
 writeExpressionToSemanticCache :: Expr Void Void -> IO ()
-writeExpressionToSemanticCache expression =
+writeExpressionToSemanticCache =
+    writeGraphToSemanticCache . NormalForm.CanonicalGraph . DAG.fromExpr
+
+-- | Write a canonical graph to the semantic cache. The file bytes are the
+--   DAG CBOR, and the file name is their SHA-256.
+writeGraphToSemanticCache :: NormalForm.CanonicalGraph Void -> IO ()
+writeGraphToSemanticCache (NormalForm.CanonicalGraph canonical) =
     -- Defaulting to not displaying the warning is for backwards compatibility
     -- with the old behavior
     State.evalStateT (writeToSemanticCache (\message -> Data.Text.IO.hPutStrLn stderr message) hash bytes) CacheWarned
   where
-    bytes = encodeExpression expression
+    bytes = DAGCBOR.encodeGraph canonical
 
     hash = Dhall.Crypto.sha256Hash bytes
 
@@ -1063,7 +1074,7 @@ writeToSemanticCache
     -> m ()
 writeToSemanticCache report hash bytes = do
     _ <- Maybe.runMaybeT $ do
-        cacheFile <- getCacheFile report "dhall" hash
+        cacheFile <- getCacheFile report semanticCacheDirectory hash
         liftIO (AtomicWrite.Binary.atomicWriteFile cacheFile bytes)
     return ()
 
@@ -2392,7 +2403,7 @@ In any expression `p ? q` the opportunistic caching rule says:
                                             (Core.denote (unsafeCoerce inlined :: Expr Src Void)))
                                     )
 
-                            let bytes = encodeExpression (Core.alphaNormalize normalized)
+                            let bytes = encodedAlphaGraph normalized
 
                             let actualHash = Dhall.Crypto.sha256Hash bytes
 
@@ -2795,21 +2806,31 @@ encodeExpression expression = bytesStrict
 
     bytesStrict = Write.toStrictByteString encoding
 
--- | Hash a fully resolved, αβ-normal expression
---
--- The argument must already be β-normalized and α-normalized.  The semantic
--- integrity check is defined as the SHA-256 of the binary encoding of that
--- αβ-normal form.  Hashing a typechecked-but-unreduced tree (for example the
--- result of 'load' of an unhashed @Code@ import) produces a value that is
--- __not__ a valid integrity hash.
-hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
-hashExpression = Dhall.Crypto.sha256Hash . encodeExpression
+-- | Directory for DAG-CBOR semantic cache files. Distinct from the old
+--   tree-CBOR directory so the two encodings are never mixed.
+semanticCacheDirectory :: FilePath
+semanticCacheDirectory = "dhall-dag-v1"
 
--- | Same integrity hash as 'hashExpression', from a hash-consed graph.
--- Uses the legacy tree CBOR of 'Core.toSharedExpr'; experimental DAG CBOR
--- is not the default semantic hash.
+-- | DAG CBOR of an expression that is already α-normal.
+encodedGraph :: Expr Void Void -> Data.ByteString.ByteString
+encodedGraph = DAGCBOR.encodeGraph . DAG.fromExpr
+
+-- | DAG CBOR of the α-normal form. β-normalization is the caller's job.
+encodedAlphaGraph :: Expr Void Void -> Data.ByteString.ByteString
+encodedAlphaGraph =
+    DAGCBOR.encodeGraph . DAG.alphaNormalizeGraph . DAG.fromExpr
+
+-- | Hash a fully resolved, αβ-normal expression.
+--
+-- The argument must already be β-normalized and α-normalized. The integrity
+-- check is the SHA-256 of the canonical DAG CBOR of that form. Hashing a
+-- typechecked-but-unreduced tree is not a valid integrity hash.
+hashExpression :: Expr Void Void -> Dhall.Crypto.SHA256Digest
+hashExpression = Dhall.Crypto.sha256Hash . encodedGraph
+
+-- | Same integrity hash as 'hashExpression', from a canonical graph.
 hashExpressionGraph :: Core.CoreGraph Void -> Dhall.Crypto.SHA256Digest
-hashExpressionGraph g = hashExpression (Core.toSharedExpr g)
+hashExpressionGraph = DAGCBOR.hashGraph
 
 {-| Convenience utility to hash a fully resolved, αβ-normal expression and
     return the base-16 encoded hash with the @sha256:@ prefix
@@ -2820,8 +2841,13 @@ hashExpressionGraph g = hashExpression (Core.toSharedExpr g)
     As with 'hashExpression', the argument must already be αβ-normal.
 -}
 hashExpressionToCode :: Expr Void Void -> Text
-hashExpressionToCode expr =
-    "sha256:" <> Text.pack (show (hashExpression expr))
+hashExpressionToCode =
+    hashCanonicalToCode . NormalForm.CanonicalGraph . DAG.fromExpr
+
+-- | 'hashExpressionToCode' for a canonical graph.
+hashCanonicalToCode :: NormalForm.CanonicalGraph Void -> Text
+hashCanonicalToCode (NormalForm.CanonicalGraph canonical) =
+    "sha256:" <> Text.pack (show (DAGCBOR.hashGraph canonical))
 
 -- | When an expression is only a code import, return that import.
 singleCodeImport :: Expr Src Import -> Maybe Import
@@ -2847,24 +2873,40 @@ alphaBetaNormalForIntegrityHash
     -> Maybe (Core.ReifiedNormalizer Void)
     -> Import
     -> ImportSemantics
-    -> IO (Expr Void Void)
+    -> IO (NormalForm.CanonicalGraph Void)
 alphaBetaNormalForIntegrityHash _ _ _ ImportSemantics
     { importSemantics
     , importNormalizationStatus = AlreadyNormalized
     } =
-        pure (Core.alphaNormalize importSemantics)
+        pure (NormalForm.CanonicalGraph (DAG.alphaNormalizeGraph (DAG.fromExpr importSemantics)))
 alphaBetaNormalForIntegrityHash status Nothing import_ ImportSemantics { importSemantics } = do
     body <- lookupSharedBody status import_
     case body of
         Just twin ->
-            Exception.evaluate
-                (Core.alphaNormalize (normalizeLoaded status twin))
+            Exception.evaluate (normalizeLoadedForHash status twin)
         Nothing ->
             Exception.evaluate
-                (Core.alphaNormalize (Core.normalize importSemantics))
+                (NormalForm.alphaCanonical (NormalForm.normalizeToGraph importSemantics))
 alphaBetaNormalForIntegrityHash _ customNormalizer _ ImportSemantics { importSemantics } =
     Exception.evaluate
-        (Core.alphaNormalize (Core.normalizeWith customNormalizer importSemantics))
+        ( NormalForm.CanonicalGraph
+            ( DAG.alphaNormalizeGraph
+                ( DAG.fromExpr
+                    ( Core.denote
+                        ( Core.normalizeWith customNormalizer importSemantics )
+                    )
+                )
+            )
+        )
+
+-- | αβ-normal canonical graph of a shared import twin.
+--
+-- The embed parameter is 'Void' because a resolved twin has no imports left.
+-- 'ImportRef' is only a type tag at that point.
+normalizeLoadedForHash
+    :: Status -> Expr s ImportRef -> NormalForm.CanonicalGraph Void
+normalizeLoadedForHash status expression =
+    NormalForm.alphaCanonical (unsafeCoerce (normalizeLoadedToGraph status expression))
 
 -- | The twin body of an import loaded with 'loadWithShared'.
 lookupSharedBody :: Status -> Import -> IO (Maybe (Expr Src ImportRef))

@@ -88,9 +88,11 @@ module Dhall.Core (
     , DAG.GraphMetrics(..)
     , DAG.alphaNormalizeGraph
     , hashExpressionGraph
-    -- * Experimental DAG CBOR (not the default semantic hash)
+    -- * Canonical DAG CBOR, the semantic-hash encoding
     , DAGCBOR.encodeGraph
     , DAGCBOR.decodeGraph
+    , DAGCBOR.hashGraph
+    , DAGCBOR.hashGraphLegacy
     -- * Identified evaluation
     , Eval.EvalConfig(..)
     , Eval.EvalStats(..)
@@ -178,10 +180,9 @@ normalizeGraph = Eval.normalizeGraph
 normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
 normalizeGraphWith = Eval.normalizeGraphWith
 
--- | SHA-256 of the *legacy tree* CBOR of a graph. Same bytes as hashing
--- 'toSharedExpr'; DAG CBOR is experimental and is not used here.
+-- | SHA-256 of the canonical DAG CBOR. This is the semantic integrity hash.
 hashExpressionGraph :: DAG.CoreGraph Void -> Dhall.Crypto.SHA256Digest
-hashExpressionGraph = DAGCBOR.hashGraphLegacy
+hashExpressionGraph = DAGCBOR.hashGraph
 
 {-| Escape a `Data.Text.Text` literal using Dhall's escaping rules
 

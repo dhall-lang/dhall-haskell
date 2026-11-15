@@ -1,8 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Experimental DAG CBOR (Phase 7). Default semantic hash remains the
--- legacy tree encoding until the coordinated Phase 8 switch.
+-- | Canonical DAG CBOR. This is the semantic-hash and semantic-cache encoding.
 --
 -- Envelope: @["Dhall-DAG", 1, nodes, root]@. Each node is encoded with the
 -- existing expression CBOR labels, with child edges as @Var \"_\" n@ referring
@@ -11,6 +10,7 @@
 module Dhall.Core.DAG.CBOR
     ( encodeGraph
     , decodeGraph
+    , hashGraph
     , hashGraphLegacy
     ) where
 
@@ -63,7 +63,11 @@ import qualified Dhall.Binary
 import qualified Dhall.Map
 import qualified Dhall.Syntax         as Syntax
 
--- | SHA-256 of the current (legacy tree) CBOR of a graph. Unchanged goldens.
+-- | SHA-256 of the canonical DAG CBOR. This is the semantic integrity hash.
+hashGraph :: CoreGraph Void -> SHA256Digest
+hashGraph = sha256Hash . encodeGraph
+
+-- | SHA-256 of the legacy tree CBOR. Kept so tests can show the break.
 hashGraphLegacy :: CoreGraph Void -> SHA256Digest
 hashGraphLegacy =
     sha256Hash . Lazy.toStrict . Dhall.Binary.encodeExpression . toSharedExpr
