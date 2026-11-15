@@ -61,10 +61,13 @@ benchmarks mPattern = do
                 let graph = DAG.fromExpr sharedTree
                     treeBytes = Lazy.length (Binary.encodeExpression sharedTree)
                     graphBytes = Lazy.length (Lazy.fromStrict (DAGCBOR.encodeGraph graph))
+                let presented = Core.presentationExpr (Core.CanonicalGraph graph)
                 say $ "graph.metrics depth " <> show graphMetricsDepth
                     <> " unique " <> show (DAG.uniqueNodes (DAG.graphMetrics graph))
                     <> " tree_bytes " <> show treeBytes
                     <> " graph_bytes " <> show graphBytes
+                    <> " present_len " <> show (Text.length (Core.pretty presented))
+                    <> " full_len " <> show (Text.length (Core.pretty sharedTree))
                 pure [graphMetricsBenchGroup]
             else pure []
     dagout <- dagoutBenchmarks mPattern

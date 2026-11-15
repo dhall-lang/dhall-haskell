@@ -770,3 +770,20 @@ Normalized `k8s.file3` (330 unique nodes, 39,827 tree bytes, 9,689 graph bytes):
 
 The graph encoding is smaller in every case (about 54,000× on the synthetic tree, 41× on `large1`, 4× on `k8s.file3`). Building the graph and hashing it was slower than hashing the tree, because interning walks expanded constructors and the legacy hash expands the graph again. Canonical DAG CBOR is now the hash and the cache encoding despite that cost.
 
+### After the normal-form migration
+
+Repeated `x + x`, depth 20 (21 unique nodes, 6,291,453 tree bytes, 117 graph bytes, presentation 369 characters, expanded print 19,088,165 characters):
+
+| Bench | Time |
+| --- | --- |
+| `hash_tree` / `hash_graph` (canonical DAG hash) | 158 ms |
+| `hash_legacy` (old tree CBOR) | 286 ms |
+| `cbor_tree` | 85 ms |
+| `cbor_graph` | 160 ms |
+
+The canonical hash beats the old tree hash on this repeated structure. The presentation is about 50,000× smaller than the expanded print.
+
+Normalized `large1` (5,499 unique nodes, 5,959,927 tree bytes, 140,182 graph bytes): hashing the canonical encoding took 175 ms. `k8s.file3`, `large3.typecheck`, and the other fixtures that import a hash-protected Kubernetes package no longer resolve, because those packages still carry the old tree hashes. Their bytes were not regenerated.
+
+Evaluation against the quote-memo tip: `ChurchEval` 439 ms (was 437 ms), `large1.evaluation` 137 ms (unchanged), `large7.nf_inlined` 10.3 ms (was 10.1 ms). `large5.typecheck` was 150 ms. None of these moved outside the noise.
+
