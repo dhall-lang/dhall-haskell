@@ -17,6 +17,7 @@ import Test.Tasty.Bench
 import Bench.Common (ResolvedExpr, couldMatch, ensureWellTyped, resolveWithCache, say, timed)
 
 import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
 import qualified Dhall
 import qualified Dhall.Binary as Binary
@@ -76,6 +77,10 @@ graphMetricsBenchGroup =
             (nf (DAG.uniqueNodes . graphMetricsOfSharedTree) graphMetricsDepth)
         , bench "hash_tree" (nf Import.hashExpression sharedTree)
         , bench "hash_graph" (nf (Core.hashExpressionGraph . DAG.fromExpr) sharedTree)
+        , bench "hash_legacy" (nf (DAGCBOR.hashGraphLegacy . DAG.fromExpr) sharedTree)
+        , bench "present_bytes"
+            (nf (Text.length . Core.pretty . Core.presentationExpr . Core.CanonicalGraph . DAG.fromExpr) sharedTree)
+        , bench "full_bytes" (nf (Text.length . Core.pretty) sharedTree)
         , bench "cbor_tree" (nf (Lazy.length . Binary.encodeExpression) sharedTree)
         , bench "cbor_graph"
             (nf (Lazy.length . Lazy.fromStrict . DAGCBOR.encodeGraph . DAG.fromExpr) sharedTree)
