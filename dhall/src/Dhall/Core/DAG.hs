@@ -572,8 +572,9 @@ shiftGraph d (V x n0) g = runST $ do
     root <- go n0 (graphRoot g)
     freeze b root
 
--- | Graph substitution. Binders in the body still shift the replacement the
--- same way as tree 'subst'; the result is re-interned.
+-- | Graph substitution. Not used on a production graph path. The body and
+-- replacement are materialized and the result is re-interned, matching tree
+-- 'subst'.
 substGraph :: Eq a => Var -> CoreGraph a -> CoreGraph a -> CoreGraph a
 substGraph var replacement body =
     fromExpr (substExpr var (toSharedExpr replacement) (toSharedExpr body))

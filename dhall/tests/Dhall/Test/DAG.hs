@@ -37,6 +37,11 @@ import Dhall.Core.DAG
     , validate
     )
 import Dhall.Pretty (ChooseCharacterSet (..))
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text.IO
+import qualified System.FilePath as FilePath
+import System.Directory (doesDirectoryExist, listDirectory)
+import System.FilePath ((</>))
 import Test.Tasty   (TestTree)
 import Test.Tasty.HUnit ((@?=))
 
@@ -241,7 +246,69 @@ tests =
             let e = denote (normalize repeatedOpenPlus :: Expr Void Void)
             Core.hashExpressionGraph (fromPure e)
                 @?= Import.hashExpression e
+
+        , HUnit.testCase "legacy normal-form helpers stay on the whitelist" $ do
+            hits <- legacyHits "src"
+            case hits of
+                [] -> pure ()
+                _  -> HUnit.assertFailure (unlines hits)
         ]
+
+-- Modules that may mention the legacy materializers. A new production file
+-- that calls one of them fails this test.
+legacyWhitelist :: [FilePath]
+legacyWhitelist =
+    [ "Dhall/Core/NormalForm.hs"
+    , "Dhall/Core.hs"
+    , "Dhall/Eval.hs"
+    , "Dhall/Core/DAG.hs"
+    , "Dhall/Core/DAG/CBOR.hs"
+    , "Dhall/Core/CSE.hs"
+    , "Dhall/Import.hs"
+    , "Dhall/TH.hs"
+    , "Dhall/Marshal/Decode.hs"
+    , "Dhall/Import/Headers.hs"
+    ]
+
+legacyNames :: [Text]
+legacyNames = ["normalizeToExprLegacy", "toSharedExpr", "hashGraphLegacy"]
+
+legacyHits :: FilePath -> IO [String]
+legacyHits root = do
+    files <- haskellFiles root
+    fmap concat $ for files $ \file -> do
+        let relative = dropPrefix root file
+        if relative `elem` legacyWhitelist
+            then pure []
+            else do
+                ls <- fmap Text.lines (Text.IO.readFile file)
+                pure
+                    [ file <> ":" <> show n <> ": " <> Text.unpack line
+                    | (n, line) <- zip [1 :: Int ..] ls
+                    , not (isComment line)
+                    , any (`Text.isInfixOf` line) legacyNames
+                    ]
+  where
+    for = flip mapM
+    dropPrefix prefix path =
+        let rest = drop (length prefix) path
+        in dropWhile (== '/') rest
+    isComment line =
+        case Text.stripPrefix "--" (Text.stripStart line) of
+            Just _  -> True
+            Nothing -> False
+
+haskellFiles :: FilePath -> IO [FilePath]
+haskellFiles dir = do
+    names <- listDirectory dir
+    fmap concat $ for names $ \name -> do
+        let path = dir </> name
+        isDir <- doesDirectoryExist path
+        if isDir
+            then haskellFiles path
+            else pure [path | FilePath.takeExtension path == ".hs"]
+  where
+    for = flip mapM
 
 fromPure :: Expr Void Void -> CoreGraph Void
 fromPure = fromExpr

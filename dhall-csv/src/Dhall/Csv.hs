@@ -266,7 +266,12 @@ codeToValue remoteImportMode mFilePath code = do
             status'
 
     normalizedExpression <-
-        evaluate (Dhall.Import.normalizeLoaded status' shared)
+        evaluate
+            ( Core.renote
+                ( Core.exprFromCanonical
+                    ( Dhall.Import.canonicalLoaded status' shared )
+                )
+            )
 
     _ <- Core.throws inferred
 

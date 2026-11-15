@@ -2640,9 +2640,11 @@ rebuildShared template sharedChildren =
 --   does not consult 'Status''s custom normalizer: callers that set one
 --   should normalize the inlined expression instead.  An ill-kinded starting
 --   context is ignored; type-checking reports that error.
+-- | Legacy materialization of a canonical graph. Prefer 'canonicalLoaded'
+-- or 'presentLoaded'.
 normalizeLoaded :: Status -> Expr s ImportRef -> Expr t Void
 normalizeLoaded status expression =
-    Core.renote (dropImportRefs (quoteShared status expression))
+    Core.renote (NormalForm.exprFromCanonical (canonicalLoaded status expression))
 
 -- | Printed normal form of a shared import. Alpha-normalization, when
 -- requested, is applied to the canonical graph before common-subexpression
@@ -2703,14 +2705,6 @@ normalizeLoadedCapped (Just nbytes) status expression =
         case Bounded.prettyBounded nbytes (Pretty.pretty presented) of
             Bounded.Truncated _ -> True
             Bounded.Complete _ -> False
-
-quoteShared :: Status -> Expr s ImportRef -> Expr Void ImportRef
-quoteShared status expression =
-    Eval.quote
-        (Eval.envNames env)
-        (Eval.eval env (Core.denote expression))
-  where
-    env = sharedEnvironment status
 
 -- | Every 'ImportRef' resolves, so quoting leaves no 'Embed' to coerce away.
 dropImportRefs :: Expr s ImportRef -> Expr s Void
@@ -2815,7 +2809,12 @@ loadRelativeToTypecheckAndNormalize parentDirectory mode expression = do
     inferred <-
         State.evalStateT (typecheckLoaded expression resolved) status'
     normalized <-
-        Exception.evaluate (normalizeLoaded status' shared :: Expr Src Void)
+        Exception.evaluate
+            ( Core.renote
+                ( NormalForm.exprFromCanonical
+                    ( canonicalLoaded status' shared )
+                ) :: Expr Src Void
+            )
     pure (normalized, inferred)
 
 -- | See 'loadRelativeTo'.

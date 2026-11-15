@@ -1799,6 +1799,7 @@ instance Hashable (QuoteKey a) where
 
 -- | Quote a value by interning 'Dhall.Core.DAG.CoreNode's, then rebuild a
 -- physically shared 'Expr'.
+-- | Legacy materialization of a quoted value. Prefer 'quoteToGraph'.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
 quote env t0 = DAG.toSharedExpr (quoteToGraph env t0)
 

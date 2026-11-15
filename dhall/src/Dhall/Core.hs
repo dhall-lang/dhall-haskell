@@ -84,7 +84,7 @@ module Dhall.Core (
     , DAG.SharingMode(..)
     , DAG.fromExpr
     , DAG.toSharedExpr
-    , DAG.prettyGraph
+    , prettyGraph
     , DAG.graphMetrics
     , DAG.GraphMetrics(..)
     , DAG.alphaNormalizeGraph
@@ -171,6 +171,10 @@ import qualified Dhall.Eval          as Eval
 -- | Pretty-print a value
 pretty :: Pretty a => a -> Text
 pretty = pretty_
+
+-- | Print the CSE presentation of a graph, not the expanded normal form.
+prettyGraph :: (Eq a, Pretty a) => DAG.CoreGraph a -> Text
+prettyGraph = pretty_ . presentationExpr . CanonicalGraph
 {-# INLINE pretty #-}
 
 -- | Hash-consed beta-normal form. 'normalize' is this graph rebuilt as a

@@ -113,7 +113,7 @@ typecheck expected expr = do
         Left err -> throwM err
         Right _  -> return ()
 
-    return (Core.normalize expr)
+    return (Core.renote (Core.normalizeToExprLegacy expr))
 
 normalizeHeaders :: Expr Src Void -> IO (Expr Src Void)
 normalizeHeaders headersExpr = do
