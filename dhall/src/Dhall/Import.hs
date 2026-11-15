@@ -116,6 +116,8 @@ module Dhall.Import (
     , normalizeLoadedToGraph
     , normalizeLoadedForHash
     , presentLoaded
+    , canonicalLoaded
+    , textOfLoaded
     , normalizeLoadedCapped
     , localToPath
     , hashExpression
@@ -2650,12 +2652,27 @@ presentLoaded :: Status -> Bool -> Expr s ImportRef -> Expr t Void
 presentLoaded status useAlpha expression =
     Core.renote (NormalForm.presentationExpr canonical)
   where
-    raw :: NormalForm.CanonicalGraph Void
-    raw = unsafeCoerce (normalizeLoadedToGraph status expression)
+    raw = canonicalLoaded status expression
     canonical =
         if useAlpha
         then NormalForm.alphaCanonical raw
         else raw
+
+-- | Canonical graph of a resolved import twin. The 'ImportRef' tag is gone.
+canonicalLoaded
+    :: Status -> Expr s ImportRef -> NormalForm.CanonicalGraph Void
+canonicalLoaded status expression =
+    unsafeCoerce (normalizeLoadedToGraph status expression)
+
+-- | Text at the root of the canonical graph. Presentation lets are not
+-- unwrapped: a text value is a text literal, not a let.
+textOfLoaded :: Status -> Expr s ImportRef -> Maybe Text
+textOfLoaded status expression =
+    case DAG.lookupNode canonical (DAG.rootId canonical) of
+        DAG.CTextLit [] text -> Just text
+        _                    -> Nothing
+  where
+    NormalForm.CanonicalGraph canonical = canonicalLoaded status expression
 
 -- | Canonical graph for a shared import twin. Does not rebuild an 'Expr'.
 normalizeLoadedToGraph

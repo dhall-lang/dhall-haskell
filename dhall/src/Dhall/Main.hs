@@ -1125,7 +1125,15 @@ command (Options {..}) = do
                                     resolvedExpression
                                 )
                                 status
-                    return (inferredType, False)
+                    return (presentInferred inferredType, False)
+
+                presentInferred inferredType =
+                    Dhall.Core.renote
+                        ( Dhall.Core.presentationExpr
+                            ( Dhall.Core.CanonicalGraph
+                                ( Dhall.Core.fromExpr (Dhall.Core.denote inferredType) )
+                            )
+                        )
 
                 printType (inferredType, quoteCut) = case maxOutputSize of
                     Nothing ->
@@ -1419,21 +1427,20 @@ command (Options {..}) = do
                         )
                         status
 
-            let normalizedExpression =
-                    Dhall.Import.normalizeLoaded status sharedExpression
-
-            case normalizedExpression of
-                Dhall.Core.TextLit (Dhall.Core.Chunks [] text) ->
+            case Dhall.Import.textOfLoaded status sharedExpression of
+                Just text ->
                     let write = case output of
                           StandardOutput -> Data.Text.IO.putStr
                           OutputFile file_ -> Data.Text.IO.writeFile file_
                     in write text
-                _ -> do
+                Nothing -> do
                     let invalidDecoderExpected :: Expr Void Void
                         invalidDecoderExpected = Dhall.Core.Text
 
                     let invalidDecoderExpression :: Expr Void Void
-                        invalidDecoderExpression = normalizedExpression
+                        invalidDecoderExpression =
+                            Dhall.Core.exprFromCanonical
+                                (Dhall.Import.canonicalLoaded status sharedExpression)
 
                     Control.Exception.throwIO (Dhall.InvalidDecoder {..})
 
@@ -1458,8 +1465,13 @@ command (Options {..}) = do
                         (Dhall.Import.typecheckLoaded expression resolvedExpression)
                         status
 
+            -- Legacy: the directory-tree decoder matches on an 'Expr'.
+            -- The value is the canonical graph, not the presentation form.
             let normalizedExpression =
-                    Dhall.Import.normalizeLoaded status sharedExpression
+                    Dhall.Core.renote
+                        ( Dhall.Core.exprFromCanonical
+                            ( Dhall.Import.canonicalLoaded status sharedExpression )
+                        )
 
             DirectoryTree.toDirectoryTree directoryTreeOptions path normalizedExpression
 

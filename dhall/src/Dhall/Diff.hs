@@ -48,7 +48,7 @@ import qualified Data.Set
 import qualified Data.Text
 import qualified Data.Time             as Time
 import qualified Dhall.Map
-import qualified Dhall.Normalize       as Normalize
+import qualified Dhall.Core.NormalForm as NormalForm
 import qualified Dhall.Pretty.Internal as Internal
 import qualified Dhall.Syntax          as Syntax
 import qualified Prettyprinter         as Pretty
@@ -163,11 +163,18 @@ rparen :: Diff
 rparen = token Internal.rparen
 
 -- | Render the difference between the normal form of two expressions
+-- | Diff of two canonical graphs, materialized to 'Expr' for the tree diff.
+--   This is a legacy bridge: the comparison is alpha-normal structure, not
+--   the CSE presentation.
 diffNormalized :: (Eq a, Pretty a) => Expr s a -> Expr s a -> Diff
 diffNormalized l0 r0 = Dhall.Diff.diff l1 r1
   where
-    l1 = Normalize.alphaNormalize (Normalize.normalize l0)
-    r1 = Normalize.alphaNormalize (Normalize.normalize r0)
+    materialize =
+        NormalForm.exprFromCanonical
+            . NormalForm.alphaCanonical
+            . NormalForm.normalizeToGraph
+    l1 = materialize l0
+    r1 = materialize r0
 
 diffPrimitive :: Eq a => (a -> Diff) -> a -> a -> Diff
 diffPrimitive f l r

@@ -44,6 +44,7 @@ module Dhall.Core (
     , PresentationGraph (..)
     , toPresentationGraph
     , presentationExpr
+    , exprFromCanonical
     , alphaCanonical
     , normalizeGraph
     , normalizeGraphWith
@@ -149,6 +150,7 @@ import Dhall.Core.NormalForm
     , normalizeToGraph
     , normalizeWithConfigToGraph
     , presentationExpr
+    , exprFromCanonical
     , toPresentationGraph
     )
 import Dhall.Normalize

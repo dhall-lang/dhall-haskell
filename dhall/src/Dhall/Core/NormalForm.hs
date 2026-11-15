@@ -12,6 +12,7 @@ module Dhall.Core.NormalForm
     , normalizeWithConfigToGraph
     , toPresentationGraph
     , presentationExpr
+    , exprFromCanonical
     , alphaCanonical
     , normalizeToExprLegacy
     ) where
@@ -51,6 +52,11 @@ toPresentationGraph (CanonicalGraph g) = PresentationGraph (cseGraph g)
 -- in the graph, so this is not the expanded normal form.
 presentationExpr :: (Eq a, Pretty a) => CanonicalGraph a -> Expr Void a
 presentationExpr = DAG.toSharedExpr . getPresentationGraph . toPresentationGraph
+
+-- | Legacy materialization for a decoder that still matches on 'Expr'
+-- constructors. Not a printed normal form and not a hash input.
+exprFromCanonical :: CanonicalGraph a -> Expr Void a
+exprFromCanonical = DAG.toSharedExpr . getCanonicalGraph
 
 alphaCanonical :: Eq a => CanonicalGraph a -> CanonicalGraph a
 alphaCanonical (CanonicalGraph g) = CanonicalGraph (DAG.alphaNormalizeGraph g)
