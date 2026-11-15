@@ -396,6 +396,7 @@ Library
     Other-Modules:
         Dhall.Core.DAG.Node
         Dhall.Core.CSE
+        Dhall.Core.NormalForm
         Dhall.DirectoryTree.Types
         Dhall.Eval
         Dhall.Eval.Run

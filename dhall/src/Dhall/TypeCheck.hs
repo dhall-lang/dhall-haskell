@@ -14,6 +14,7 @@ module Dhall.TypeCheck (
     -- * Type-checking
       typeWith
     , typeOf
+    , typeOfToGraph
     , typeOfWithConfig
     , typeOfWithStats
     , typeWithA
@@ -76,6 +77,7 @@ import Dhall.Eval
 import Dhall.Core.DAG
     ( NodeId (..)
     )
+import Dhall.Core.NormalForm (CanonicalGraph (..))
 import Dhall.Eval.Run
     ( EnvId (..)
     , InferKey (..)
@@ -1489,6 +1491,15 @@ infer typer = loop
 -}
 typeOf :: Expr s X -> Either (TypeError s X) (Expr s X)
 typeOf = typeWith Dhall.Context.empty
+
+-- | Inferred type as a canonical graph. Does not rebuild an 'Expr'.
+typeOfToGraph
+    :: Expr s X
+    -> Either (TypeError s X) (CanonicalGraph X)
+typeOfToGraph expr =
+    withEvalRun defaultEvalConfig $
+        fmap (CanonicalGraph . quoteToGraphInRun EmptyNames)
+            (infer absurd (contextToCtx Dhall.Context.empty) expr)
 
 -- | 'typeOf' under an explicit 'EvalConfig'. The default 'typeOf' is unchanged.
 --   Used by the evaluation A/B benchmark; not a behavior change for callers

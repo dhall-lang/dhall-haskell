@@ -12,6 +12,7 @@ import Dhall.Core
     , denote
     , makeFunctionBinding
     , normalize
+    , normalizeToExprLegacy
     , normalizeGraph
     , normalizeGraphWith
     , pretty
@@ -231,6 +232,10 @@ tests =
             let e = repeatedOpenPlus
                 g = fromPure e
             CBOR.encodeGraph g @?= CBOR.encodeGraph (fromExpr (toSharedExpr g))
+
+        , HUnit.testCase "canonical graph quotes to the same expression" $ do
+            let e = denote (normalize repeatedOpenPlus :: Expr Void Void)
+            normalizeToExprLegacy e @?= e
 
         , HUnit.testCase "legacy graph hash matches tree hash" $ do
             let e = denote (normalize repeatedOpenPlus :: Expr Void Void)

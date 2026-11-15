@@ -47,11 +47,14 @@ module Dhall.Eval (
   , normalizeWithStats
   , normalizeGraph
   , normalizeGraphWith
+  , normalizeGraphWithConfig
   , alphaNormalize
   , eval
   , evalInRun
   , quote
   , quoteInRun
+  , quoteToGraph
+  , quoteToGraphInRun
   , quoteGraph
   , quoteBounded
   , envNames
@@ -1797,11 +1800,18 @@ instance Hashable (QuoteKey a) where
 -- | Quote a value by interning 'Dhall.Core.DAG.CoreNode's, then rebuild a
 -- physically shared 'Expr'.
 quote :: forall a. Eq a => Names -> Val a -> Expr Void a
-quote env t0 = withEvalRun defaultEvalConfig $ runST $ do
+quote env t0 = DAG.toSharedExpr (quoteToGraph env t0)
+
+-- | Quote straight to a canonical graph. Does not rebuild an 'Expr'.
+quoteToGraph :: forall a. Eq a => Names -> Val a -> DAG.CoreGraph a
+quoteToGraph env t0 = withEvalRun defaultEvalConfig (quoteToGraphInRun env t0)
+
+-- | 'quoteToGraph' for a caller that already opened an eval run.
+quoteToGraphInRun :: forall a. Eq a => Names -> Val a -> DAG.CoreGraph a
+quoteToGraphInRun env t0 = runST $ do
     b <- DAG.newBuilder DAG.SharingOn
     nid <- quoteGraph b env t0
-    g <- DAG.freeze b nid
-    return (DAG.toSharedExpr g)
+    DAG.freeze b nid
 
 -- | Quote into an existing intern builder. Child nodes are interned before parents.
 quoteGraph :: forall s a. Eq a => DAG.Builder s a -> Names -> Val a -> ST s DAG.NodeId
@@ -2949,6 +2959,15 @@ normalizeGraphWith :: Eq a => DAG.SharingMode -> Expr s a -> DAG.CoreGraph a
 normalizeGraphWith mode e =
     withEvalRun defaultEvalConfig { internSharing = mode } $ runST $ do
         b <- DAG.newBuilder mode
+        nid <- quoteGraph b EmptyNames (evalImpl Empty (Syntax.denote e))
+        DAG.freeze b nid
+
+-- | 'normalizeWithConfig', without rebuilding an 'Expr'.
+normalizeGraphWithConfig
+    :: Eq a => EvalConfig -> Expr s a -> DAG.CoreGraph a
+normalizeGraphWithConfig cfg e =
+    withEvalRun cfg $ runST $ do
+        b <- DAG.newBuilder (internSharing cfg)
         nid <- quoteGraph b EmptyNames (evalImpl Empty (Syntax.denote e))
         DAG.freeze b nid
 

@@ -37,6 +37,14 @@ module Dhall.Core (
     -- * Normalization
     , alphaNormalize
     , normalize
+    , normalizeToGraph
+    , normalizeWithConfigToGraph
+    , normalizeToExprLegacy
+    , CanonicalGraph (..)
+    , PresentationGraph (..)
+    , toPresentationGraph
+    , presentationExpr
+    , alphaCanonical
     , normalizeGraph
     , normalizeGraphWith
     , normalizeWith
@@ -130,6 +138,16 @@ import Dhall.Core.CSE
     , cseGraph
     , cseWith
     , defaultCseOptions
+    )
+import Dhall.Core.NormalForm
+    ( CanonicalGraph (..)
+    , PresentationGraph (..)
+    , alphaCanonical
+    , normalizeToExprLegacy
+    , normalizeToGraph
+    , normalizeWithConfigToGraph
+    , presentationExpr
+    , toPresentationGraph
     )
 import Dhall.Normalize
 import Dhall.Pretty.Internal

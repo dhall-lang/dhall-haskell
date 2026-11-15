@@ -113,6 +113,7 @@ module Dhall.Import (
     , loadWithShared
     , loadCollectingShared
     , normalizeLoaded
+    , normalizeLoadedToGraph
     , normalizeLoadedCapped
     , localToPath
     , hashExpression
@@ -267,6 +268,7 @@ import qualified Dhall.Binary
 import qualified Dhall.Context
 import qualified Dhall.Core                                  as Core
 import qualified Dhall.Crypto
+import qualified Dhall.Core.NormalForm                      as NormalForm
 import qualified Dhall.Eval                                  as Eval
 import qualified Dhall.Map
 import qualified Dhall.Parser
@@ -2625,6 +2627,18 @@ rebuildShared template sharedChildren =
 normalizeLoaded :: Status -> Expr s ImportRef -> Expr t Void
 normalizeLoaded status expression =
     Core.renote (dropImportRefs (quoteShared status expression))
+
+-- | Canonical graph for a shared import twin. Does not rebuild an 'Expr'.
+normalizeLoadedToGraph
+    :: Status -> Expr s ImportRef -> NormalForm.CanonicalGraph ImportRef
+normalizeLoadedToGraph status expression =
+    Eval.withEvalRun Eval.defaultEvalConfig $
+        NormalForm.CanonicalGraph
+            (Eval.quoteToGraphInRun
+                (Eval.envNames env)
+                (Eval.evalInRun env (Core.denote expression)))
+  where
+    env = sharedEnvironment status
 
 -- | 'normalizeLoaded', or the same evaluation with quoting stopped after
 --   @budget@ bytes.  'Nothing' quotes the whole normal form and the 'Bool' is
