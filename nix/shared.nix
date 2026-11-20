@@ -233,6 +233,33 @@ let
                         (pkgsNew.haskellSrc ../dhall-toml)
                         { };
 
+                    # The pinned nixpkgs set is from before yamlet 1.0.0.2,
+                    # and its scientific and text-iso8601 are older than
+                    # yamlet accepts.
+                    yamlet =
+                      haskellPackagesNew.callCabal2nix "yamlet"
+                        (pkgsNew.fetchzip {
+                          url = "https://hackage.haskell.org/package/yamlet-1.0.0.2/yamlet-1.0.0.2.tar.gz";
+                          sha256 = "0sl2lv2sczm2g8zpyrlgn2887khrg5v5bhb6qh44gymw9lj1wnbg";
+                        })
+                        { };
+
+                    scientific =
+                      haskellPackagesNew.callCabal2nix "scientific"
+                        (pkgsNew.fetchzip {
+                          url = "https://hackage.haskell.org/package/scientific-0.3.9.0/scientific-0.3.9.0.tar.gz";
+                          sha256 = "0m5zcmgfshlah3wymn0l576kafnnghn7j9vr1ab0j5zkwizafk5v";
+                        })
+                        { };
+
+                    text-iso8601 =
+                      haskellPackagesNew.callCabal2nix "text-iso8601"
+                        (pkgsNew.fetchzip {
+                          url = "https://hackage.haskell.org/package/text-iso8601-0.1.1.2/text-iso8601-0.1.1.2.tar.gz";
+                          sha256 = "1jr00pwzc1rgs0688fn2k6rffphsah9a92x58i6m635abvafh370";
+                        })
+                        { };
+
                     dhall-yaml =
                       haskellPackagesNew.callCabal2nix
                         "dhall-yaml"

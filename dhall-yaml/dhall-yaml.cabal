@@ -32,16 +32,16 @@ Source-Repository head
 Library
     Hs-Source-Dirs: src
     Build-Depends:
-        HsYAML                    >= 0.2       && < 0.3 ,
-        HsYAML-aeson              >= 0.2       && < 0.3 ,
-        base                      >= 4.11.0.0  && < 5   ,
-        aeson >=1.0.0.0 && <2.4 ,
+        aeson                     >= 2.1       && < 2.4 ,
+        base                      >= 4.16      && < 5   ,
         bytestring                                < 0.13,
         dhall                     >= 1.31.0    && < 1.43,
         dhall-json                >= 1.6.0     && < 1.8 ,
         optparse-applicative      >= 0.14.0.0  && < 0.20,
-        text                      >= 0.11.1.0  && < 2.2 ,
-        vector
+        scientific                >= 0.3.9     && < 0.4 ,
+        text                      >= 2.0.2     && < 2.2 ,
+        vector,
+        yamlet                    >= 1.0       && < 1.1
     Exposed-Modules:
         Dhall.Yaml
         Dhall.YamlToDhall

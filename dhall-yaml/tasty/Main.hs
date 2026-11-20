@@ -125,7 +125,7 @@ testTree =
         , testYamlToDhall "./tasty/data/decode-nested"
         , testDecodeRejects "decode-tag" "!secret 123\n" "unresolved YAML scalar encountered"
         , testYamlToDhall "./tasty/data/decode-plain-inf"
-        , testYamlToDhall "./tasty/data/decode-duplicate-key"
+        , testDecodeRejects "decode-duplicate-key" "a: 1\na: 2\n" "duplicate key"
         , testYamlToDhall "./tasty/data/decode-dot-inf"
         , testYamlToDhall "./tasty/data/decode-dot-neg-inf"
         , testYamlToDhall "./tasty/data/decode-dot-nan"
@@ -144,7 +144,7 @@ testDhallToYaml options prefix testScope =
             TestBoth -> [hsYamlTest, hsAesonYamlTest]
     )
   where
-    hsYamlTest = testCase Dhall.Yaml.dhallToYaml "HsYAML"
+    hsYamlTest = testCase Dhall.Yaml.dhallToYaml "yamlet"
     hsAesonYamlTest = testCase Dhall.JSON.Yaml.dhallToYaml "aeson-yaml"
     testCase dhallToYaml s = Test.Tasty.HUnit.testCase s $ do
         let inputFile = prefix <> ".dhall"

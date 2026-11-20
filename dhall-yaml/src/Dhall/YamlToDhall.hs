@@ -1,4 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Dhall.YamlToDhall
   ( Options(..)
@@ -11,6 +13,7 @@ module Dhall.YamlToDhall
 import Control.Exception (Exception, throwIO)
 import Data.Aeson        (Value)
 import Data.ByteString   (ByteString)
+import Data.List         (foldl')
 import Data.Text         (Text)
 import Data.Void         (Void)
 import Dhall.Core        (Expr)
@@ -28,8 +31,16 @@ import Dhall.JSONToDhall
     )
 import Dhall.Src         (Src)
 
+import qualified Data.Aeson         as Aeson
+import qualified Data.Aeson.Key     as Key
+import qualified Data.Aeson.KeyMap  as KeyMap
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.YAML.Aeson
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Scientific    as Scientific
+import qualified Data.Vector        as Vector
+import qualified Dhall.Yaml
+import qualified Yamlet
+import qualified Yamlet.Value       as Value
 
 -- | Options to parametrize conversion
 data Options = Options
@@ -75,13 +86,56 @@ schemaFromYaml yaml = do
 
     return (schemaToDhallType (inferSchema value))
 
-{-| Wrapper around `Data.YAML.Aeson.decode1Strict` that renders the error
-    message
+{-| Decode one YAML 1.2 document into a JSON value.
+
+    A stream with any other number of documents is rejected. A tag outside
+    the core schema is rejected. Two equal keys are an error.
 -}
 yamlToJson :: ByteString -> Either String Data.Aeson.Value
-yamlToJson s = case Data.YAML.Aeson.decode1Strict s of
-    Right v         -> Right v
-    Left (pos, err) -> Left (show pos ++ err)
+yamlToJson bytes =
+    case Yamlet.decodeAll @Value.Value bytes of
+        Left errs ->
+            Left (unlines (Yamlet.prettyError "" <$> NonEmpty.toList errs))
+        Right [value] -> valueToAeson value
+        Right [] ->
+            Left "No documents found in YAML stream"
+        Right _ ->
+            Left "Multiple documents encountered in YAML stream"
+
+valueToAeson :: Value.Value -> Either String Data.Aeson.Value
+valueToAeson = \case
+    Value.Null -> Right Aeson.Null
+    Value.Bool bool -> Right (Aeson.Bool bool)
+    Value.Int integer -> Right (Aeson.Number (fromInteger integer))
+    Value.Float (Value.Finite scientific) -> Right (Aeson.Number scientific)
+    Value.Float Value.NegativeZero ->
+        Right (Aeson.Number (doubleToScientific (-0)))
+    Value.Float Value.Infinity ->
+        Right (Aeson.Number (doubleToScientific (1 / 0)))
+    Value.Float Value.NegativeInfinity ->
+        Right (Aeson.Number (doubleToScientific ((-1) / 0)))
+    Value.Float Value.NaN ->
+        Right (Aeson.Number (doubleToScientific (0 / 0)))
+    Value.String text -> Right (Aeson.String text)
+    Value.Sequence values ->
+        Aeson.Array . Vector.fromList <$> traverse valueToAeson values
+    Value.Mapping pairs -> do
+        entries <- traverse mappingEntry pairs
+        pure (Aeson.Object (foldl' insert KeyMap.empty entries))
+    Value.Tagged _ _ ->
+        Left "unresolved YAML scalar encountered"
+  where
+    mappingEntry (key, value) = do
+        text <- case key of
+            Value.String text -> Right text
+            _ -> Left "non-String key encountered in mapping"
+        decoded <- valueToAeson value
+        pure (Key.fromText text, decoded)
+
+    insert object (key, value) = KeyMap.insert key value object
+
+doubleToScientific :: Double -> Scientific.Scientific
+doubleToScientific = realToFrac
 
 showYaml :: Value -> String
-showYaml value = BS8.unpack (Data.YAML.Aeson.encode1Strict value)
+showYaml value = BS8.unpack (Dhall.Yaml.jsonToYaml value False False)

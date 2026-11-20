@@ -14,10 +14,14 @@ This `dhall-yaml` package provides a Dhall to YAML compiler, `dhall-to-yaml-ng`,
 and a tool for deriving Dhall from YAML code: `yaml-to-dhall`.
 
 Note that the `dhall-json` package also provides a `dhall-to-yaml` executable.
-Currently, the behavior of the `dhall-to-yaml` and `dhall-to-yaml-ng`
-executables should not differ much, but eventually the `dhall-to-yaml-ng`
-executable should be able to support greater functionality due to using the
-`HsYAML` package as an intermediate step in the transformation process.
+`dhall-to-yaml-ng` renders YAML with the `yamlet` package. The conversion
+rules are in [`yaml-conversion.md`](yaml-conversion.md). `dhall-to-yaml` uses
+`aeson-yaml` and does not follow every rule there, in particular the quoting
+of YAML 1.1 bool words.
+
+This package builds with GHC 9.4 and later. The GHC 8.10 and GHC 9.2 Stack
+resolvers do not build it: `yamlet` needs `text >= 2.0.2`, and the GHC 9.2
+snapshot pins `text` 1.2.
 
 Tutorials for the analogous JSON tools are available in the `dhall-json`
 package:

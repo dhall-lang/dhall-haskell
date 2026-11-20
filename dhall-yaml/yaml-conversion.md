@@ -2,7 +2,7 @@
 
 This document is the contract for `dhall-to-yaml-ng` and `yaml-to-dhall` in this package. It is not a dhall-lang standard. The language standardizes Dhall and JSON. `Prelude/JSON/renderYAML` is a smaller pure-Dhall renderer and is not this contract.
 
-`dhall-json`'s `dhall-to-yaml` executable is a different renderer (`aeson-yaml`). Its output is not a rule for this package. The golden `tasty/data/normal-aeson` is that other renderer: it leaves the YAML 1.1 bool word `y` unquoted (`yes: y`). This package quotes it. The HsYAML case of that golden is an expected failure.
+`dhall-json`'s `dhall-to-yaml` executable is a different renderer (`aeson-yaml`). Its output is not a rule for this package. The golden `tasty/data/normal-aeson` is that other renderer: it leaves the YAML 1.1 bool word `y` unquoted (`yes: y`). This package quotes it. The yamlet case of that golden is an expected failure.
 
 Each normative rule names the test that locks it. Tests live in `tasty/Main.hs` and `tasty/data/`.
 
@@ -67,7 +67,7 @@ The plain scalar `inf` is the string `"inf"`, not a double. `Infinity` was rewri
 
 `.inf`, `-.inf`, and `.nan` are core-schema floats. They become a JSON number by converting the `Double` with `realToFrac`, then a Dhall number. `.inf` is the `Natural` in `./tasty/data/decode-dot-inf.dhall` (the greatest finite `Double`, read back as an integer). `-.inf` is that magnitude as an `Integer`. Test: `./tasty/data/decode-dot-neg-inf`. `.nan` is the `Natural` in `./tasty/data/decode-dot-nan.dhall`. Test: `./tasty/data/decode-dot-nan`.
 
-A mapping with two equal keys keeps the last value. `a: 1` then `a: 2` is `{ a = 2 }`. Test: `./tasty/data/decode-duplicate-key`.
+A mapping with two equal keys is an error. The message contains `duplicate key`. Test: `decode-duplicate-key`.
 
 A stream with a second document is rejected. The error contains `Multiple documents encountered in YAML stream`. Test: `decode-second-document`.
 
