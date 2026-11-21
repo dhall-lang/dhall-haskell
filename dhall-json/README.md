@@ -34,4 +34,6 @@ bar:
 
 This package's `dhall-to-yaml` and `dhall-yaml`'s `dhall-to-yaml-ng` should be
 kept as closely in sync as possible. Common code for these executables lives
-in this package, tests live in `dhall-yaml`.
+in this package, tests live in `dhall-yaml`. `dhall-to-yaml-ng` quotes YAML 1.1
+bool words; `dhall-to-yaml` does not. The rules for `dhall-to-yaml-ng` are in
+`dhall-yaml/yaml-conversion.md`.

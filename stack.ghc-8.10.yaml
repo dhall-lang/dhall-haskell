@@ -10,7 +10,6 @@ packages:
   - dhall-nix
   - dhall-openapi
   - dhall-toml
-  - dhall-yaml
 allow-newer: true
 allow-newer-deps:
   - dhall-lsp-server

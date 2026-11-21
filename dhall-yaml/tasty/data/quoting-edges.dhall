@@ -1,0 +1,10 @@
+{ dot = "."
+, empty = ""
+, false_word = "false"
+, negative = "-3"
+, on_mixed = "On"
+, scientific = "1e2"
+, yes_upper = "YES"
+, yesterday = "yesterday"
+, zero_one = "01"
+}

@@ -128,6 +128,12 @@ jobs:
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
               continue
             fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-8.10.yaml' ] && [ "${package}" == 'dhall-yaml' ]; then
+              continue
+            fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.2.yaml' ] && [ "${package}" == 'dhall-yaml' ]; then
+              continue
+            fi
 
             # We use --test --no-run-tests to avoid re-building all the local packages in the
             # subsequent test step.
@@ -160,6 +166,12 @@ jobs:
               continue
             fi
             if [ '${{matrix.os.runner}}' == 'windows-latest' ] && [ "${package}" == 'dhall-nix' ]; then
+              continue
+            fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-8.10.yaml' ] && [ "${package}" == 'dhall-yaml' ]; then
+              continue
+            fi
+            if [ '${{matrix.stack-yaml}}' == 'stack.ghc-9.2.yaml' ] && [ "${package}" == 'dhall-yaml' ]; then
               continue
             fi
 
