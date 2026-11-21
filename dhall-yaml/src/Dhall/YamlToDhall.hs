@@ -115,7 +115,9 @@ valueToAeson = \case
     Value.Float Value.NegativeInfinity ->
         Right (Aeson.Number (doubleToScientific ((-1) / 0)))
     Value.Float Value.NaN ->
-        Right (Aeson.Number (doubleToScientific (0 / 0)))
+        -- The sign bit of a quiet NaN depends on the platform. YAML `.nan`
+        -- has no sign, so the integer is the positive magnitude.
+        Right (Aeson.Number (abs (doubleToScientific (0 / 0))))
     Value.String text -> Right (Aeson.String text)
     Value.Sequence values ->
         Aeson.Array . Vector.fromList <$> traverse valueToAeson values

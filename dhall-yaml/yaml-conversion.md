@@ -65,7 +65,7 @@ A tag outside the core schema leaves the scalar unresolved. `!secret 123` is rej
 
 The plain scalar `inf` is the string `"inf"`, not a double. `Infinity` was rewritten to that string on the way out, and this is how it reads back. Test: `./tasty/data/decode-plain-inf`.
 
-`.inf`, `-.inf`, and `.nan` are core-schema floats. They become a JSON number by converting the `Double` with `realToFrac`, then a Dhall number. `.inf` is the `Natural` in `./tasty/data/decode-dot-inf.dhall` (the greatest finite `Double`, read back as an integer). `-.inf` is that magnitude as an `Integer`. Test: `./tasty/data/decode-dot-neg-inf`. `.nan` is the `Natural` in `./tasty/data/decode-dot-nan.dhall`. Test: `./tasty/data/decode-dot-nan`.
+`.inf`, `-.inf`, and `.nan` are core-schema floats. They become a JSON number by converting the `Double` with `realToFrac`, then a Dhall number. `.inf` is the `Natural` in `./tasty/data/decode-dot-inf.dhall` (the greatest finite `Double`, read back as an integer). `-.inf` is that magnitude as an `Integer`. Test: `./tasty/data/decode-dot-neg-inf`. `.nan` is the `Natural` in `./tasty/data/decode-dot-nan.dhall`. The sign bit of the platform `NaN` is discarded, so that `Natural` is the same on every platform. Test: `./tasty/data/decode-dot-nan`.
 
 A mapping with two equal keys is an error. The message contains `duplicate key`. Test: `decode-duplicate-key`.
 

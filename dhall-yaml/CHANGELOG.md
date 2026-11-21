@@ -3,6 +3,7 @@
 * Build `dhall-yaml` with `yamlet` instead of `HsYAML`
 * Require GHC 9.4 or later (`base >= 4.16`, `text >= 2.0.2`, `aeson >= 2.1`)
 * Reject a YAML mapping with two equal keys. The previous decoder kept the last value.
+* Decode `.nan` as the same positive `Natural` on every platform. The sign bit of a quiet NaN no longer changes the result.
 * `Dhall.YamlToDhall.Options` carries a `RemoteImportMode`. `dhall-to-yaml-ng`
   and `yaml-to-dhall` accept `--no-remote`, which rejects http and https
   imports used as code, as Text, or as Bytes, including integrity-checked
