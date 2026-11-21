@@ -142,6 +142,7 @@ unsafeSubExpressions f (RecordCompletion a b) = RecordCompletion <$> f a <*> f b
 unsafeSubExpressions f (Merge a b t) = Merge <$> f a <*> f b <*> traverse f t
 unsafeSubExpressions f (ToMap a t) = ToMap <$> f a <*> traverse f t
 unsafeSubExpressions f (ShowConstructor a) = ShowConstructor <$> f a
+unsafeSubExpressions f (ReadConstructor a) = ReadConstructor <$> f a
 unsafeSubExpressions f (Project a b) = Project <$> f a <*> traverse f b
 unsafeSubExpressions f (Assert a) = Assert <$> f a
 unsafeSubExpressions f (Equivalent cs a b) = Equivalent cs <$> f a <*> f b
@@ -227,6 +228,7 @@ reservedKeywords =
         , "assert"
         , "forall"
         , "with"
+        , "readConstructor"
         ]
 
 -- | The set of reserved identifiers for the Dhall language

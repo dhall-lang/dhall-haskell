@@ -198,6 +198,8 @@ data CompileError
     -- ^ We currently do not support threading around type information
     | CannotShowConstructor
     -- ^ We currently do not support the `showConstructor` keyword
+    | CannotReadConstructor
+    -- ^ We currently do not support the `readConstructor` keyword
     | BytesUnsupported
     -- ^ The Nix language does not support arbitrary bytes (most notably: null
     --   bytes)
@@ -271,6 +273,17 @@ by the expected type (i.e. ❰someRecord.(someType)❱
 $_ERROR: Cannot translate the ❰showConstructor❱ keyword
 
 The ❰dhall-to-nix❱ compiler does not support the ❰showConstructor❱ keyword.
+
+In theory this keyword shouldn't need to be translated anyway since the keyword
+doesn't survive β-normalization, so if you see this error message there might be
+an internal error in ❰dhall-to-nix❱ that you should report.
+    |]
+
+    show CannotReadConstructor =
+        Data.Text.unpack [NeatInterpolation.text|
+$_ERROR: Cannot translate the ❰readConstructor❱ keyword
+
+The ❰dhall-to-nix❱ compiler does not support the ❰readConstructor❱ keyword.
 
 In theory this keyword shouldn't need to be translated anyway since the keyword
 doesn't survive β-normalization, so if you see this error message there might be
@@ -793,6 +806,8 @@ dhallToNix e = do
             )
     loop (ShowConstructor _) = do
         Left CannotShowConstructor
+    loop (ReadConstructor _) = do
+        Left CannotReadConstructor
     loop (Prefer _ _ b c) = do
         b' <- loop b
         c' <- loop c

@@ -1067,6 +1067,11 @@ convertToHomogeneousMaps (Conversion {..}) e0 = loop (Core.normalize e0)
           where
             a' = loop a
 
+        Core.ReadConstructor a ->
+            Core.ReadConstructor a'
+          where
+            a' = loop a
+
         Core.Field a b ->
             Core.Field a' b
           where
