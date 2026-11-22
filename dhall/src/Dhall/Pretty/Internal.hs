@@ -1390,6 +1390,8 @@ prettyPrinters characterSet =
         builtin "Text"
     prettyPrimitiveExpression TextReplace =
         builtin "Text/replace"
+    prettyPrimitiveExpression TextEqual =
+        builtin "Text/equal"
     prettyPrimitiveExpression TextShow =
         builtin "Text/show"
     prettyPrimitiveExpression Date =
